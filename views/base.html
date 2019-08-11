@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-hant">
+
+<head>
+  <title>大直高中選課系統</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/uikit/3.1.7/css/uikit.min.css"
+    integrity="sha256-1NCiLO1eL8xsDn3wFHlM37FhxQjBruKz/veyTbWSWHk=" crossorigin="anonymous" />
+</head>
+
+<body>
+  <!--HEADER-->
+  <header class="uk-box-shadow-small uk-light uk-background-primary">
+    <div class="uk-container">
+      <nav class="uk-navbar" id="navbar" data-uk-navbar>
+        <div class="uk-navbar-left">
+          <a class="uk-navbar-item uk-logo" href="/">大直高中選課系統 <span uk-icon="home"></span></a>
+        </div>
+        <div class="uk-navbar-right">
+          <ul class="uk-navbar-nav uk-visible@m">
+            <li><a href="https://web.dcsh.tp.edu.tw/"><span uk-icon="world"></span> 大直高中</a></li>
+            <li><a href="https://coursemap.dcsh.tp.edu.tw/"><span uk-icon="info"></span> 選課指引</a></li>
+            <li><a href="/task/"><span uk-icon="list"></span>選課任務</a></li>
+            {% if cuser.IsAdmin %}
+            <li><a href="/user/"><span uk-icon="user"></span>使用者</a></li>
+            {% endif %}
+            {% if cuser.ID == 0 %}
+            <li><a href="/user/login/"><span uk-icon="sign-in"></span> 行政人員登入</a></li>
+            {% else %}
+            <li><a href="/user/logout/"><span uk-icon="sign-out"></span> 登出 {{ cuser.Username }}</a></li>
+            {% endif %}
+          </ul>
+        </div>
+      </nav>
+    </div>
+  </header>
+  <!--/HEADER-->
+  <!--AUTHOR-->
+  <div class="uk-container">
+    {% if alerts %}
+    <section id="alerts" class="uk-section uk-padding-small">
+      {% for alert in alerts %}
+      <div class="{{ alert.atype }} uk-margin-small" uk-alert>{{ alert.msg|linebreaks|safe }}</div>
+      {% endfor %}
+    </section>
+    {% endif %}
+    <section id="main-content" class="uk-section uk-section-default uk-padding-small">
+      <div class="uk-container">
+        {% block content %}{% endblock %}
+      </div>
+    </section>
+  </div>
+  <!--FOOTER-->
+  <footer class="uk-section-secondary">
+    <div class="uk-section uk-section-xsmall" style="background-color: rgba(0,0,0,0.15)">
+      <div class="uk-container">
+        <div class="uk-grid uk-child-width-1-2@s uk-text-center uk-text-left@s" data-uk-grid>
+          <div class="uk-text-small uk-text-muted">
+            Copyright 2019 大直高中資訊組 - All rights reserved.
+          </div>
+          <div class="uk-text-small uk-text-muted uk-text-center uk-text-right@s">
+            <a href="https://github.com/zzseba78/Kick-Off">Created by KickOff</a> | Built with <a
+              href="http://getuikit.com" title="Visit UIkit 3 site" target="_blank" data-uk-tooltip><span
+                data-uk-icon="uikit"></span></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+  <!--/FOOTER-->
+  <!-- JS FILES -->
+  <link rel="stylesheet" href="{{ static }}/css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/uikit/3.1.7/js/uikit.min.js"
+    integrity="sha256-Si/RSqVaI2Nt0NBCIADY5gtwKd6MVxsARUchEjnOoh4=" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/uikit/3.1.7/js/uikit-icons.min.js"
+    integrity="sha256-xx24qw2IGUl97Dv7hUvw9UKnw2G7iVq+MmE4nkM/WJs=" crossorigin="anonymous"></script>
+  {% block footer_scripts %}{% endblock %}
+</body>
+</html>

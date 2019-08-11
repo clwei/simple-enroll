@@ -1,0 +1,37 @@
+{% extends "../base.html" %}
+
+{% block content %}
+<div class="uk-flex uk-flex-middle">
+  <h1>使用者列表</h1>
+  <a href="create/" class="uk-button uk-button-small uk-button-primary uk-margin-left"><span uk-icon="plus-circle"></span> 新增使用者</a>
+</div>
+<table class="uk-table uk-table-divider uk-table-small">
+    <thead>
+      <tr>
+        <th>帳號</th>
+        <th>班級</th>
+        <th>座號</th>
+        <th>姓名</th>
+        <th>角色</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td><a href="{{ u.ID }}/">{{ u.Username }}</a></td>
+        <td>{{ u.Cno }}</td>
+        <td>{{ u.Seat }}</td>
+        <td>{{ u.Name }}</td>
+        <td>
+            {% if u.IsStaff %}<div>行政人員</div>{% endif %}
+            {% if u.IsAdmin %}<div>管理員</div>{% endif %}
+        </td>
+        <td>
+          <a href="{{ u.ID }}/edit/"><span uk-icon="pencil"></span></a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

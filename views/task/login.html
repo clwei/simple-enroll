@@ -1,0 +1,25 @@
+{% extends "../base.html" %}
+
+{% block content %}
+{% if task.ID %}
+<div class="header uk-flex uk-flex-middle">
+    <h1>{{ task.Title }}</h1>
+    <div class="uk-text-muted uk-text-small uk-margin-small-left"><span uk-icon="clock"></span> {{ task.Tstart|date:"2006/01/02 15:04" }} ～ {{ task.Tend|date:"2006/01/02 15:04" }}</div>
+</div>
+<div id="task-attributes">
+    <div class="uk-text-muted uk-margin">{{ task.Desc|safe }}</div>
+</div>
+<form action="" method="POST" class="uk-grid-small" uk-grid>
+    {{ csrf_token_input|safe }}
+    <div class="uk-width-1-3 uk-form-controls">
+        <input type="text" name="username" class="uk-input" placeholder="學號">
+    </div>
+    <div class="uk-width-1-3 uk-form-controls">
+        <input type="password" name="passwd" class="uk-input" placeholder="身分證號">
+    </div>
+    <div class="uk-width-1-3 uk-form-controls">
+        <input type="submit" class="uk-input uk-button uk-button-primary" value="登入">
+    </div>
+</form>
+{% endif %}
+{% endblock %}

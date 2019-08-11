@@ -1,0 +1,73 @@
+{% extends "../base.html" %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+<form action="" method="POST" class="uk-form-horizontal">
+    {{ csrf_token_input|safe }}
+    <input type="hidden" id="id" name="id" value="{{ task.ID }}" />
+    <div class="uk-margin-small">
+        <label for="title" class="uk-form-label">選課任務名稱</label>
+        <div class="uk-form-controls">
+            <input id="title" name="title" type="text" class="uk-input" value="{{ task.Title }}" placeholder="請輸入選課任務名稱..." />
+        </div>
+    </div>
+    <div class="uk-margin-small">
+        <label for="tstart" class="uk-form-label">選課起始時間</label>
+        <div class="uk-form-controls"><input type="text" id="tstart" name="tstart" class="uk-input" value="{{ task.Tstart|default:now|date:"2006-01-02 15:04" }}" /></div>
+    </div>
+    <div class="uk-margin-small">
+        <label for="tend" class="uk-form-label">選課截止時間</label>
+        <div class="uk-form-controls"><input type="text" id="tend" name="tend" class="uk-input" value="{{ task.Tend|default:now|date:"2006-01-02 15:04" }}" /></div>
+    </div>
+    <div class="uk-margin-small">
+        <label for="vnum" class="uk-form-label">志願數量</label>
+        <div class="uk-form-controls">
+            <input type="number" id="vnum" name="vnum" class="uk-input" value="{{ task.Vnum }}" />
+        </div>
+    </div>
+    <div class="uk-margin-small">
+        <label for="desc" class="uk-form-label">備註說明</label>
+        <div class="uk-form-controls">
+            <input id="desc" type="hidden" name="desc" />
+            <div id="desc_editor" class="uk-textarea">{{ task.Desc|safe }}</div>
+        </div>
+    </div>
+    <div class="uk-margin-small">
+        <label for="students" class="uk-form-label">學生資料</label>
+        <div class="uk-form-controls">
+            <textarea name="students" id="students" cols="30" rows="10" class="uk-textarea">{{ task.Students }}</textarea>
+            <div class="uk-text uk-text-small uk-text-muted uk-alert">
+               資料輸入格式如下，每筆資料一行：
+               <pre>學號    班級    座號    姓名    身分證號</pre>
+               例：
+               <pre>10735001	101	01	王oo	X123456789<br/>10735002	101	02	林oo	X223456789</pre>
+               <div>也可下載「<a href="{{ static }}/EnrollTaskData.xlsx">範本檔</a>」，填好相關資料後將「學生」資料表內容複製貼上於此欄位</div>
+            </div>
+        </div>
+    </div>
+    <div class="uk-margin-small">
+        <label for="courses" class="uk-form-label">課程資料</label>
+        <div class="uk-form-controls">
+            <textarea name="courses" id="courses" cols="30" rows="10" class="uk-textarea">{{ task.Courses }}</textarea>
+            <div class="uk-text uk-text-small uk-text-muted uk-alert">
+                資料輸入格式如下，每筆資料一行：
+                <pre>課程名稱	選修人數下限	選修人數上限</pre>
+                例：
+                <pre>悅讀臺北	15	30<br/>經典小說	15	30</pre>
+                <div>也可下載「<a href="{{ static }}/EnrollTaskData.xlsx">範本檔</a>」，填好相關資料後將「課程」資料表內容複製貼上於此欄位</div>
+            </div>
+        </div>
+    </div>
+    <div>
+        <div class="uk-form-controls"><input id="submit" type="submit" value="送出" class="uk-input uk-button uk-button-primary"/></div>
+    </div>
+</form>
+{% endblock %}
+
+{% block footer_scripts %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.min.css" integrity="sha256-DOS9W6NR+NFe1fUhEE0PGKY/fubbUCnOfTje2JMDw3Y=" crossorigin="anonymous" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.slim.min.js" integrity="sha256-pasqAKBDmFT4eHoN2ndd6lN370kFiGUFyTiUHWhU7k8=" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.full.min.js" integrity="sha256-FEqEelWI3WouFOo2VWP/uJfs1y8KJ++FLh2Lbqc8SJk=" crossorigin="anonymous"></script>
+<script src="https://cdn.ckeditor.com/ckeditor5/12.3.1/inline/ckeditor.js"></script>
+<script src="{{ static }}/js/task_form_helper.js"></script>
+{% endblock footer_scripts %}

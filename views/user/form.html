@@ -1,0 +1,69 @@
+{% extends '../base.html' %}
+
+{% block content %}
+<div class="uk-flex uk-flex-middle">
+  <h1>{{ title }}</h1>
+</div>
+<form action="" method="POST" class="uk-form-horizontal">
+  {{ csrf_token_input|safe }}
+  <input type="hidden" name="id" id="id" value="{{ user.ID }}" />
+  <div class="uk-margin-small">
+    <label for="username" class="uk-form-label">帳號</label>
+    <div class="uk-form-controls">
+      <input type="text" name="username" id="username" class="uk-input" value="{{ user.Username }}" placeholder="請輸入帳號..." />
+    </div>
+  </div>
+  <div class="uk-margin-small">
+    <label for="passwd" class="uk-form-label">密碼</label>
+    <div class="uk-form-controls uk-grid-small" uk-grid>
+      <input type="password" name="passwd" id="passwd" class="uk-input uk-width-1-2" value="" placeholder="密碼..."/>
+      <input type="password" name="passwdv" id="passwdv" class="uk-input uk-width-1-2" value="" placeholder="確認密碼..." />
+      {% if user.ID > 0 %}
+      <div class="uk-text uk-text-small uk-text-muted">若不需修改密碼，就不需填寫密碼欄位</div>
+      {% endif %}
+      </div>
+  </div>
+  <div class="uk-margin-small">
+    <label for="cno" class="uk-form-label">班級座號</label>
+    <div class="uk-form-controls uk-grid-small" uk-grid>
+      <select name="cno" id="cno" class="uk-select uk-width-1-2">
+        {% for option in classes %}
+        <option value="{{ option }}" {% if option == user.Cno %}selected{% endif %}>{{ option|default:"無班級" }}</option>
+        {% endfor %}
+      </select>
+      <select name="seat" id="seat" class="uk-select uk-width-1-2">
+        {% for seat in seats %}
+        <option value="{{ seat }}" {% if seat == user.Seat %}selected{% endif %}>{{ seat|default:"無座號" }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="uk-margin-small">
+    <label for="name" class="uk-form-label">姓名</label>
+    <div class="uk-form-controls">
+      <input type="text" name="name" id="name" class="uk-input" value="{{ user.Name }}" />
+    </div>
+  </div>
+  <div class="uk-margin-small">
+    <label class="uk-form-label">身份</label>
+    <div class="uk-form-controls">
+      <label for="">
+        <input type="checkbox" name="is_staff" id="is_staff" value="true"{% if user.IsStaff %}checked{% endif %}/>
+        行政人員
+      </label> 
+      <label for="">
+        <input type="checkbox" name="is_admin" id="is_admin" value="true"{% if user.IsAdmin %}checked{% endif %}/>
+        管理員
+      </label> 
+    </div>
+  </div>
+  <div class="uk-margin-small">
+    <div class="uk-form-controls"><input type="submit" id="submit" class="uk-input uk-button uk-button-primary" value="送出" /></div>
+  </div>
+</form>
+{% endblock content %}
+
+{% block footer_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.slim.min.js" integrity="sha256-pasqAKBDmFT4eHoN2ndd6lN370kFiGUFyTiUHWhU7k8=" crossorigin="anonymous"></script>
+<script src="{{ static }}/js/user_form_helper.js"></script>
+{% endblock %}

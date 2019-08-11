@@ -1,0 +1,12 @@
+.uk-list.uk-sortable>li {
+    cursor: grab;
+}
+ol.uk-list.uk-sortable>li {
+    list-style-type: decimal;
+}
+ol.uk-list.uk-sortable>li::before {
+    display: inline;
+}
+ol.uk-list.uk-sortable {
+    list-style-position: inside;
+}

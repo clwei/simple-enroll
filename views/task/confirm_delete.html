@@ -1,0 +1,22 @@
+{% extends "../base.html" %}
+
+{% block content %}
+<h1>刪除選課任務</h1>
+<div class="uk-alert uk-alert-danger uk-margin">
+    <p>確定要刪除 <strong>{{ task.Title }}</strong> 嗎？</p>
+    <p>這會刪除與這個選課任務相關的所有資料，包含學生選填的志願序，分派結果等等。</p>
+</div>
+<form action="" method="post">
+    {{ csrf_token_input|safe }}
+    <input id="cancel" type="button" class="uk-button uk-button-small uk-button-default" value="取消" />
+    <input id="submit" type="submit" class="uk-button uk-button-small uk-button-danger" value="刪除" />
+</form>
+{% endblock content %}
+
+{% block footer_scripts %}
+<script>
+document.querySelector('#cancel').addEventListener('click', function(e) {
+    window.history.go(-1);
+});
+</script>
+{% endblock %}

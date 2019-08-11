@@ -1,0 +1,51 @@
+{% extends "../base.html" %}
+
+{% block content %}
+<form action="" method="POST">
+    {{ csrf_token_input|safe }}
+    <input id="selection" type="hidden" name="selection" value="{{ selection }}" />
+    <input id="username" type="hidden" name="username" value="{{ stu.sid }}" />
+    <div class="header uk-flex uk-flex-middle">
+        <h1>{{ task.Title }}</h1>
+        <div class="uk-text-muted uk-text-small uk-margin-small-left"><span uk-icon="clock"></span> {{ task.Tstart|date:"2006/01/02 15:04" }} ～ {{ task.Tend|date:"2006/01/02 15:04" }}</div>
+    </div>
+    <div id="task-attributes">
+        <div class="uk-text-muted uk-margin">{{ task.Desc|safe }}</div>
+    </div>
+    <div class="uk-child-width-1-2@m" uk-grid>
+        <div>
+            <div class="uk-card uk-card-small uk-card-default">
+                <div class="uk-card-header uk-flex">
+                    <div class="uk-card-title">{{ stu.cno }} 班 {{ stu.seat }} 號 {{ stu.name }} # 已選課程</div>
+                    <div class="uk-badge uk-badge-default uk-margin-small-left"><span id="selcount"></span> / <span id="total"></span></div>
+                </div>
+                <ol id="selected-courses" class="uk-list uk-list-striped course-options" uk-sortable="group: courseEnroll">
+                    {% for course in scourses %}
+                    <li>{{ course }}</li>
+                    {% endfor %}
+                </ol>
+                <div class="uk-card-footer">
+                    <input id="submit" type="submit" class="uk-input uk-button uk-button-small uk-button-primary" value="送出" disabled>
+                </div>
+            </div>
+        </div>
+        <div>
+            <div class="uk-card uk-card-small uk-card-default">
+                <div class="uk-card-header">
+                    <div class="uk-card-title">候選課程</div>
+                </div>
+                <ul id="candidate-courses" class="uk-list uk-list-striped course-options" uk-sortable="group: courseEnroll">
+                    {% for course in courses %}
+                    <li>{{ course }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock content %}
+
+{% block footer_scripts %}
+<script src="{{ static }}/js/task_enroll.js"></script>
+<script>monitorCourseCapacity({{ task.Vnum }});</script>
+{% endblock %}

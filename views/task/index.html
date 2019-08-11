@@ -1,0 +1,39 @@
+{% extends "../base.html" %}
+
+{% block content %}
+<div class="uk-flex uk-flex-middle">
+  <h1>選課任務列表</h1>
+  {% if cuser.IsAdmin || cuser.IsStaff %}
+  <a href="create/" class="uk-button uk-button-small uk-button-primary uk-margin-left"><span uk-icon="plus-circle"></span> 新增選課任務</a>
+  {% endif %}
+</div>
+<table class="uk-table uk-table-divider uk-table-small">
+  <thead>
+    <tr>
+      <th class="uk-table-expand">選課任務名稱</th>
+      <th class="uk-table-shrink" style="white-space:nowrap">志願<br/>數量</th>
+      <th class="uk-table-shrink">起始時間</th>
+      <th class="uk-table-shrink">截止時間</th>
+      {% if cuser.IsAdmin || cuser.IsStaff %}
+      <th class="uk-table-shrink">操作</th>
+      {% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for task in tasks %}
+    <tr>
+      <td><a href="{{ task.ID }}/">{{ task.Title }}</a></td>
+      <td class="uk-text-center">{{ task.Vnum }}</td>
+      <td class="uk-text-muted uk-text-small">{{ task.Tstart|date:"2006-01-02 15:04" }}</td>
+      <td class="uk-text-muted uk-text-small">{{ task.Tend|date:"2006-01-02 15:04" }}</td>
+      {% if cuser.IsAdmin || cuser.IsStaff %}
+      <td class="uk-text-small">
+        <a href="{{ task.ID }}/edit/" class="uk-icon-link" uk-icon="pencil"></a>
+        <a href="{{ task.ID }}/delete/" class="uk-icon-link uk-text-danger" uk-icon="trash"></a>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
