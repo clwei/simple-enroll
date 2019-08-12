@@ -3,9 +3,11 @@ package controllers
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"math/rand"
 
 	"github.com/clwei/simple-enroll/models"
 	"github.com/flosch/pongo2"
@@ -21,14 +23,19 @@ type TaskController struct {
 func (t *TaskController) RegisterRoutes(prefix string) {
 	g := e.Group(prefix)
 	g.GET("", t.taskList).Name = "taskList"
-	g.GET(":tid/", t.taskLogin)
-	g.POST(":tid/", t.taskSubmit)
 	g.GET("create/", t.taskForm, requireStaff)
 	g.POST("create/", t.taskFormSubmit, requireStaff)
-	g.GET(":tid/edit/", t.taskForm, requireStaff)
-	g.POST(":tid/edit/", t.taskFormSubmit, requireStaff)
-	g.GET(":tid/delete/", t.taskDelete, requireStaff)
-	g.POST(":tid/delete/", t.taskDelete, requireStaff)
+	gt := g.Group(":tid/", requireValidTaskID)
+	gt.GET("", t.taskLogin)
+	gt.POST("", t.taskSubmit)
+	gt.GET("edit/", t.taskForm, requireStaff)
+	gt.POST("edit/", t.taskFormSubmit, requireStaff)
+	gt.GET("delete/", t.taskDelete, requireStaff)
+	gt.POST("delete/", t.taskDelete, requireStaff)
+	gt.GET("view/", t.taskView, requireStaff)
+	gt.GET("view/enroll/", t.taskViewEnroll, requireStaff)
+	gt.GET("view/dispatch/", t.taskViewDispatch, requireStaff)
+	gt.POST("view/dispatch/", t.taskViewDispatch, requireStaff)
 }
 
 //
@@ -56,15 +63,43 @@ func (t *TaskController) getTaskByParam(c echo.Context, param string) (task mode
 
 //
 func (t *TaskController) taskLogin(c echo.Context) error {
-	task := t.getTaskByParam(c, "tid")
+	task := c.Get("task").(models.Task)
 	data := pongo2.Context{
 		"task": task,
 	}
 	return c.Render(http.StatusOK, "task/login.html", data)
 }
 
+// TaskCourse ...
+type TaskCourse struct {
+	name       string
+	lowerbound int
+	upperbound int
+}
+
+// getTaskCourseList 取得選課任務的課程清單
+// 		task: 選課任務
+//		filter: 要過濾掉的課程名稱
+func getTaskCourseList(task models.Task, filter []string) (courses []TaskCourse) {
+	smap := map[string]bool{}
+	for _, course := range filter {
+		smap[course] = true
+	}
+	// courses: 學生可選課程(去除已選課程)
+	lines := strings.Split(task.Courses, "\r\n")
+	for _, line := range lines {
+		fields := strings.Split(line, "\t")
+		if _, ok := smap[fields[0]]; !ok {
+			lowerbound, _ := strconv.Atoi(fields[1])
+			upperbound, _ := strconv.Atoi(fields[2])
+			courses = append(courses, TaskCourse{fields[0], lowerbound, upperbound})
+		}
+	}
+	return courses
+}
+
 func (t *TaskController) taskSubmit(c echo.Context) error {
-	task := t.getTaskByParam(c, "tid")
+	task := c.Get("task").(models.Task)
 	username := strings.TrimSpace(c.FormValue("username"))
 	selection := strings.TrimSpace(c.FormValue("selection"))
 	// fmt.Println("** taskSubmit ** selection =", selection)
@@ -74,31 +109,26 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 			Sid:       username,
 			Selection: selection,
 		}
+		fmt.Println("Tid =", task.ID, "Sid =", username, "Selection =", selection)
 		sql := `INSERT INTO public.enrollment(tid, sid, selection) 
 					VALUES(:tid, :sid, :selection)
 					ON CONFLICT(tid, sid) DO UPDATE
 					SET selection = EXCLUDED.selection`
 		if _, err := db.NamedExec(sql, enrollment); err != nil {
-			// fmt.Println("** taskSubmit ** insert error =", err, "result =", result)
+			fmt.Println("** taskSubmit ** insert error =", err)
 		}
 		return c.Redirect(http.StatusSeeOther, "/task/")
 	}
 	passwd := strings.TrimSpace(c.FormValue("passwd"))
-
-	lines := strings.Split(task.Students, "\r\n")
 	found := false
-	stu := map[string]interface{}{}
-	for _, line := range lines {
-		fields := strings.Split(line, "\t")
-		if username == strings.TrimSpace(fields[0]) && passwd == strings.TrimSpace(fields[4]) {
-			found = true
-			stu["sid"] = fields[0]
-			stu["cno"] = fields[1]
-			stu["seat"] = fields[2]
-			stu["name"] = fields[3]
-			break
-		}
+
+	stumap := parseStudent(task.Students)
+	var stu Student
+	var ok bool
+	if stu, ok = stumap[username]; ok && passwd == stu.IDno {
+		found = true
 	}
+
 	data := pongo2.Context{
 		"task": task,
 	}
@@ -113,19 +143,7 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 		} else {
 			scourses = strings.Split(enrollment.Selection, ",")
 		}
-		smap := map[string]bool{}
-		for _, course := range scourses {
-			smap[course] = true
-		}
-		// courses: 學生可選課程(去除已選課程)
-		lines = strings.Split(task.Courses, "\r\n")
-		courses := []string{}
-		for _, line := range lines {
-			fields := strings.Split(line, "\t")
-			if _, ok := smap[fields[0]]; !ok {
-				courses = append(courses, fields[0])
-			}
-		}
+		courses := getTaskCourseList(task, scourses)
 		data["courses"] = courses
 		data["stu"] = stu
 		data["username"] = username
@@ -142,7 +160,7 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 //---------------------------------------------------------------------------
 
 func (t *TaskController) taskForm(c echo.Context) error {
-	task := t.getTaskByParam(c, "tid")
+	task := c.Get("task").(models.Task)
 	opTitle := "新增選課任務"
 	if task.ID > 0 {
 		opTitle = "修改選課任務"
@@ -168,20 +186,13 @@ func trimHeaderAndSpace(src string, headerPrefix string) (dst string) {
 }
 
 func (t *TaskController) taskFormSubmit(c echo.Context) (err error) {
-	task := new(models.Task)
+	task := c.Get("task").(models.Task)
 	c.Bind(task)
 	task.Tstart, _ = time.Parse("2006-01-02 15:04-0700", c.FormValue("tstart")+"+0800")
 	task.Tend, _ = time.Parse("2006-01-02 15:04-0700", c.FormValue("tend")+"+0800")
 	task.Students = trimHeaderAndSpace(task.Students, "學號")
 	task.Courses = trimHeaderAndSpace(task.Courses, "課程名稱")
-	// lines := strings.Split(task.Students, "\n")
-	// if strings.HasPrefix(lines[0], "學號") {
-	// 	task.Students = strings.Join(lines[1:], "\n")
-	// }
-	// lines = strings.Split(task.Courses, "\n")
-	// if strings.HasPrefix(lines[0], "課程名稱") {
-	// 	task.Courses = strings.Join(lines[1:], "\n")
-	// }
+
 	var sql string
 	if task.ID > 0 {
 		sql = `UPDATE task SET (title, vnum, tstart, tend, description, students, courses) = (:title, :vnum, :tstart, :tend, :description, :students, :courses) WHERE id=:id`
@@ -195,13 +206,184 @@ func (t *TaskController) taskFormSubmit(c echo.Context) (err error) {
 }
 
 func (t *TaskController) taskDelete(c echo.Context) (err error) {
-	task := t.getTaskByParam(c, "tid")
+	task := c.Get("task").(models.Task)
 	if c.Request().Method == http.MethodPost {
-
+		db.NamedExec(`DELETE FROM enrollment WHERE id = :id`, task)
+		db.NamedExec(`DELETE FROM enrollment WHERE tid = :id`, task)
 		return c.Redirect(http.StatusSeeOther, "/task/")
 	}
 	data := pongo2.Context{
 		"task": task,
 	}
 	return c.Render(http.StatusOK, "task/confirm_delete.html", data)
+}
+
+// Student ...
+type Student struct {
+	Sid  string
+	Cno  string
+	Seat string
+	Name string
+	IDno string
+}
+
+// StuMap ...
+type StuMap map[string]Student
+
+func parseStudent(raw string) StuMap {
+	smap := StuMap{}
+	lines := strings.Split(raw, "\r\n")
+	for _, line := range lines {
+		fields := strings.Split(line, "\t")
+		stu := Student{fields[0], fields[1], fields[2], fields[3], fields[4]}
+		smap[stu.Sid] = stu
+	}
+	return smap
+}
+
+// StudentEnroll ...
+type StudentEnroll struct {
+	Student
+	Selection []string
+}
+
+func getStudentEnrollments(task models.Task) (pool []StudentEnroll, total int) {
+	enrollments := []models.Enrollment{}
+	db.Select(&enrollments, `SELECT * FROM enrollment WHERE tid = $1`, task.ID)
+	smap := parseStudent(task.Students)
+	for _, enroll := range enrollments {
+		pool = append(pool, StudentEnroll{smap[enroll.Sid], strings.Split(enroll.Selection, ",")})
+	}
+	return pool, len(smap)
+}
+
+func (t *TaskController) taskView(c echo.Context) (err error) {
+	task := c.Get("task").(models.Task)
+	pool, total := getStudentEnrollments(task)
+	courses := getTaskCourseList(task, []string{})
+	courseStat := map[string][]int{}
+	for _, c := range courses {
+		courseStat[c.name] = make([]int, task.Vnum)
+	}
+	fmt.Println(courseStat)
+	for _, e := range pool {
+		fmt.Println(e)
+		for i, c := range e.Selection {
+			fmt.Println(i, c)
+			courseStat[c][i]++
+			fmt.Println(courseStat)
+		}
+	}
+	fmt.Println(courseStat)
+	data := pongo2.Context{
+		"task":       task,
+		"seq":        "123456789"[:task.Vnum],
+		"pool":       pool,
+		"total":      total,
+		"courses":    courses,
+		"courseStat": courseStat,
+	}
+	return c.Render(http.StatusOK, "task/view.html", data)
+}
+
+func (t *TaskController) taskViewEnroll(c echo.Context) (err error) {
+	task := c.Get("task").(models.Task)
+	pool, total := getStudentEnrollments(task)
+	sort.SliceStable(pool, func(i, j int) bool {
+		if pool[i].Cno == pool[j].Cno {
+			return pool[i].Seat < pool[j].Seat
+		}
+		return pool[i].Cno < pool[j].Cno
+	})
+	data := pongo2.Context{
+		"task":  task,
+		"seq":   "123456789"[:task.Vnum],
+		"pool":  pool,
+		"total": total,
+	}
+	return c.Render(http.StatusOK, "task/view_enroll.html", data)
+}
+
+//---------------------------------------------------------------------------
+// 選課分發
+//---------------------------------------------------------------------------
+
+// CourseDispatchNode ... 
+type CourseDispatchNode struct {
+	TaskCourse
+	Fixed []Student
+	Susp []Student
+}
+
+func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
+	task := c.Get("task").(models.Task)
+	courses := getTaskCourseList(task, []string{})
+	enrolls, total := getStudentEnrollments(task)
+	smap := parseStudent(task.Students)
+	cdm := map[string]CourseDispatchNode{}
+	waitingQueue := map[string]StudentEnroll{}
+	result := []CourseDispatchNode{}
+	if true /*c.Request().Method == http.MethodPost*/ {
+		cdm := map[string]*CourseDispatchNode{}
+		waitingQueue := map[string]StudentEnroll{}
+		for _, enroll := range enrolls {
+			waitingQueue[enroll.Sid] = enroll
+		}
+		for _, course := range courses {
+			cdm[course.name] = &CourseDispatchNode{course, []Student{}, []Student{}}
+		}
+		rand.Seed(time.Now().UnixNano())
+		for vIndex := 0; vIndex < task.Vnum; vIndex++ {
+			// 依
+			for sid, enroll := range waitingQueue {
+				vCourseName := enroll.Selection[vIndex]
+				if len(cdm[vCourseName].Fixed) < cdm[vCourseName].upperbound {
+					cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, smap[sid])
+				}
+			}
+			for _, cdn := range cdm {
+				if len(cdn.Susp) == 0 {
+					continue
+				}
+				if len(cdn.Susp) > cdn.upperbound - len(cdn.Fixed) {
+					rand.Shuffle(len(cdn.Susp), func(i, j int) {cdn.Susp[i], cdn.Susp[j] = cdn.Susp[j], cdn.Susp[i]})
+				}
+				end := len(cdn.Susp)
+				if len(cdn.Susp)+len(cdn.Fixed) > cdn.upperbound {
+					end -= len(cdn.Susp)+len(cdn.Fixed)-cdn.upperbound
+				}
+				for _, stu := range cdn.Susp[:end] {
+					cdn.Fixed = append(cdn.Fixed, stu)
+					delete(waitingQueue, stu.Sid)
+				}
+				cdn.Susp = []Student{}
+			}
+		}
+		for _, p := range cdm {
+			result = append(result, *p)
+		}
+		data := pongo2.Context{
+			"task": task,
+			"courses": courses, 
+			"enrolls": enrolls,
+			"total": total,
+			"result": result,
+			"waiting": waitingQueue,
+		}
+		return c.Render(http.StatusOK, "task/view_dispatch.html", data)
+	}
+	for _, p := range cdm {
+		fmt.Println(p)
+	}
+
+
+	data := pongo2.Context{
+		"task": task,
+		"courses": courses, 
+		"enrolls": enrolls,
+		"total": total,
+		"cdm": cdm,
+		"waiting": waitingQueue,
+	}
+	return c.Render(http.StatusOK, "task/view_dispatch.html", data)
 }

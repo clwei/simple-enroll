@@ -1,0 +1,45 @@
+{% extends "../base.html" %}
+
+{% block content %}
+<div class="header uk-flex uk-flex-middle">
+  <h1>{{ task.Title }}</h1>
+  <div class="uk-text-muted uk-text-small uk-margin-small-left"><span uk-icon="clock"></span> {{ task.Tstart|date:"2006/01/02 15:04" }} ～ {{ task.Tend|date:"2006/01/02 15:04" }}</div>
+</div>
+<div class="">
+  <ul class="uk-subnav uk-subnav-pill">
+    <li><a href="/task/{{ task.ID }}/view/">課程統計</a></li>
+    <li><a href="/task/{{ task.ID }}/view/enroll/">學生志願序</a></li>
+    <li><a href="/task/{{ task.ID }}/view/dispatch/">志願分發</a></li>
+  </ul>
+</div>
+<div>
+{% block taskViewContent %}
+<div>
+  <div class="uk-card uk-card-default">
+    <div class="uk-card-header">課程志願統計</div>
+    <div class="uk-card-body">
+      <table class="uk-table uk-table-small uk-table-striped uk-table-hover">
+        <thead>
+          <tr>
+            <th>課程名稱</th>
+            {% for index in seq %}
+            <th>第 {{ index }} 志願</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for key, s in courseStat %}
+          <tr>
+            <td>{{ key }}</td>
+            {% for n in s %}
+            <td>{{ n }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock taskViewContent %}
+{% endblock content %}

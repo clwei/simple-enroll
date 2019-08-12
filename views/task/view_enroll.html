@@ -1,0 +1,43 @@
+{% extends "view.html" %}
+
+{% block taskViewContent %}
+<div class="uk-card uk-card-default">
+  <div class="uk-card-header">學生志願序</div>
+  <div class="uk-card-body">
+    <table class="uk-table uk-table-striped uk-table-small">
+      <thead>
+        <tr>
+          <th>學號</th>
+          {% for i in seq|make_list %}
+          <th>志願{{ i }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% comment %}
+        {% for id, e in emap %}
+        <tr>
+          <td>{{ id }}/{{ e.u.Cno }}{{ e.u.Seat }} {{ e.u.Name }} </td>
+          {% for c in e.s %}
+          <td>{{ c }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        {% endcomment %}
+        {% for e in pool %}
+        <tr>
+          <td>{{ e.Cno }}{{ e.Seat }}{{ e.Name }}</td>
+          {% for c in e.Selection %}
+          <td>{{ c }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="uk-card">
+
+</div>
+已選課人數 {{ pool|length }} / 需選課人數 {{ total }}
+{% endblock %}

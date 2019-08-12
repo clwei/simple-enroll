@@ -137,6 +137,17 @@ func requireAdmin(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+func requireValidTaskID(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		task := (&TaskController{}).getTaskByParam(c, "tid")
+		if task.ID == 0 {
+			return c.Render(http.StatusNotFound, "base.html", pongo2.Context{})
+		}
+		c.Set("task", task)
+		return next(c)
+	}
+}
+
 /*
 func importUserFromString(raw string) {
 	fmt.Println("** importUserFromString **")

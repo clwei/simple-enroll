@@ -1,0 +1,22 @@
+{% extends "view.html" %}
+
+{% block taskViewContent %}
+<div class="uk-card uk-card-default">
+  <div class="uk-card-header">志願分發</div>
+  <div class="uk-card-body uk-margin" uk-grid>
+    {% for r in result %}
+    <div class="uk-card uk-card-default">
+      <div class="uk-card-header">{{ r.name }} <span class="uk-badge uk-badge-primary">{{ r.Fixed|length }}</span></div>
+      <div class="uk-card-body">
+        <ul class="uk-list">
+          {% for s in r.Fixed %}
+          <li>{{ s.Cno }}{{ s.Seat }} {{ s.Name }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{{ cdm|length }}
+{% endblock %}

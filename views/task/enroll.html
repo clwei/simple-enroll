@@ -4,7 +4,7 @@
 <form action="" method="POST">
     {{ csrf_token_input|safe }}
     <input id="selection" type="hidden" name="selection" value="{{ selection }}" />
-    <input id="username" type="hidden" name="username" value="{{ stu.sid }}" />
+    <input id="username" type="hidden" name="username" value="{{ stu.Sid }}" />
     <div class="header uk-flex uk-flex-middle">
         <h1>{{ task.Title }}</h1>
         <div class="uk-text-muted uk-text-small uk-margin-small-left"><span uk-icon="clock"></span> {{ task.Tstart|date:"2006/01/02 15:04" }} ～ {{ task.Tend|date:"2006/01/02 15:04" }}</div>
@@ -16,7 +16,7 @@
         <div>
             <div class="uk-card uk-card-small uk-card-default">
                 <div class="uk-card-header uk-flex">
-                    <div class="uk-card-title">{{ stu.cno }} 班 {{ stu.seat }} 號 {{ stu.name }} # 已選課程</div>
+                    <div class="uk-card-title">{{ stu.Cno }} 班 {{ stu.Seat }} 號 {{ stu.Name }} # 已選課程</div>
                     <div class="uk-badge uk-badge-default uk-margin-small-left"><span id="selcount"></span> / <span id="total"></span></div>
                 </div>
                 <ol id="selected-courses" class="uk-list uk-list-striped course-options" uk-sortable="group: courseEnroll">
@@ -36,7 +36,7 @@
                 </div>
                 <ul id="candidate-courses" class="uk-list uk-list-striped course-options" uk-sortable="group: courseEnroll">
                     {% for course in courses %}
-                    <li>{{ course }}</li>
+                    <li>{{ course.name }}</li>
                     {% endfor %}
                 </ul>
             </div>
