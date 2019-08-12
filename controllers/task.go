@@ -1,13 +1,14 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"math/rand"
 
 	"github.com/clwei/simple-enroll/models"
 	"github.com/flosch/pongo2"
@@ -36,6 +37,7 @@ func (t *TaskController) RegisterRoutes(prefix string) {
 	gt.GET("view/enroll/", t.taskViewEnroll, requireStaff)
 	gt.GET("view/dispatch/", t.taskViewDispatch, requireStaff)
 	gt.POST("view/dispatch/", t.taskViewDispatch, requireStaff)
+	gt.GET("view/dispatch/:did/", t.taskViewDispatchItem, requireStaff)
 }
 
 //
@@ -72,7 +74,7 @@ func (t *TaskController) taskLogin(c echo.Context) error {
 
 // TaskCourse ...
 type TaskCourse struct {
-	name       string
+	Name       string
 	lowerbound int
 	upperbound int
 }
@@ -263,7 +265,7 @@ func (t *TaskController) taskView(c echo.Context) (err error) {
 	courses := getTaskCourseList(task, []string{})
 	courseStat := map[string][]int{}
 	for _, c := range courses {
-		courseStat[c.name] = make([]int, task.Vnum)
+		courseStat[c.Name] = make([]int, task.Vnum)
 	}
 	fmt.Println(courseStat)
 	for _, e := range pool {
@@ -308,82 +310,135 @@ func (t *TaskController) taskViewEnroll(c echo.Context) (err error) {
 // 選課分發
 //---------------------------------------------------------------------------
 
-// CourseDispatchNode ... 
+// CourseDispatchNode ...
 type CourseDispatchNode struct {
 	TaskCourse
-	Fixed []Student
-	Susp []Student
+	Fixed []Student // 確認選修名單
+	Susp  []Student // 考慮選修名單
 }
 
 func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
-	courses := getTaskCourseList(task, []string{})
-	enrolls, total := getStudentEnrollments(task)
-	smap := parseStudent(task.Students)
-	cdm := map[string]CourseDispatchNode{}
-	waitingQueue := map[string]StudentEnroll{}
-	result := []CourseDispatchNode{}
-	if true /*c.Request().Method == http.MethodPost*/ {
+	if c.Request().Method == http.MethodPost {
+		courses := getTaskCourseList(task, []string{})
+		enrolls, _ := getStudentEnrollments(task)
+		smap := parseStudent(task.Students)
+		result := []CourseDispatchNode{}
 		cdm := map[string]*CourseDispatchNode{}
 		waitingQueue := map[string]StudentEnroll{}
 		for _, enroll := range enrolls {
 			waitingQueue[enroll.Sid] = enroll
 		}
 		for _, course := range courses {
-			cdm[course.name] = &CourseDispatchNode{course, []Student{}, []Student{}}
+			cdm[course.Name] = &CourseDispatchNode{course, []Student{}, []Student{}}
 		}
 		rand.Seed(time.Now().UnixNano())
+		//
+		// 分發: 依第 1 志願, 第 2 志願, ... 處理
+		//
 		for vIndex := 0; vIndex < task.Vnum; vIndex++ {
-			// 依
+			// 階段1：先將所有未分發學生依目前處理的志願序，先分發到課程的考慮選修名單
 			for sid, enroll := range waitingQueue {
 				vCourseName := enroll.Selection[vIndex]
 				if len(cdm[vCourseName].Fixed) < cdm[vCourseName].upperbound {
 					cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, smap[sid])
 				}
 			}
+			// 階段2：檢查每一門課程，若確認選修人數與考慮選修人數合計超過課程上限，則由考慮選修名單中隨機剔除多餘人選
 			for _, cdn := range cdm {
-				if len(cdn.Susp) == 0 {
-					continue
+				if len(cdn.Susp) > 0 {
+					// 加上考慮名單的人數會爆班 => 隨機從考慮名單中剔除(洗牌，再取前面需要的個數就好)
+					if len(cdn.Susp) > cdn.upperbound-len(cdn.Fixed) {
+						for k := 0; k < 7; k++ {
+							rand.Shuffle(len(cdn.Susp), func(i, j int) { cdn.Susp[i], cdn.Susp[j] = cdn.Susp[j], cdn.Susp[i] })
+						}
+					}
+					// 取出需要的名單，加進確認選修清單，並將其移出未分發學生(waitingQueue)清單
+					end := len(cdn.Susp)
+					if len(cdn.Susp)+len(cdn.Fixed) > cdn.upperbound {
+						end -= len(cdn.Susp) + len(cdn.Fixed) - cdn.upperbound
+					}
+					for _, stu := range cdn.Susp[:end] {
+						cdn.Fixed = append(cdn.Fixed, stu)
+						delete(waitingQueue, stu.Sid)
+					}
+					// 處理完了，清空考慮選修名單，待下一志願序使用
+					cdn.Susp = []Student{}
 				}
-				if len(cdn.Susp) > cdn.upperbound - len(cdn.Fixed) {
-					rand.Shuffle(len(cdn.Susp), func(i, j int) {cdn.Susp[i], cdn.Susp[j] = cdn.Susp[j], cdn.Susp[i]})
-				}
-				end := len(cdn.Susp)
-				if len(cdn.Susp)+len(cdn.Fixed) > cdn.upperbound {
-					end -= len(cdn.Susp)+len(cdn.Fixed)-cdn.upperbound
-				}
-				for _, stu := range cdn.Susp[:end] {
-					cdn.Fixed = append(cdn.Fixed, stu)
-					delete(waitingQueue, stu.Sid)
-				}
-				cdn.Susp = []Student{}
 			}
 		}
+		// 將 map 轉為 slice 以便在 template 中使用
 		for _, p := range cdm {
+			// 順便依班級座號將選修名單排序
+			sort.SliceStable(p.Fixed, func(i, j int) bool {
+				return (p.Fixed[i].Cno < p.Fixed[j].Cno) || ((p.Fixed[i].Cno == p.Fixed[j].Cno) && p.Fixed[i].Seat < p.Fixed[j].Seat)
+			})
 			result = append(result, *p)
 		}
-		data := pongo2.Context{
-			"task": task,
-			"courses": courses, 
-			"enrolls": enrolls,
-			"total": total,
-			"result": result,
-			"waiting": waitingQueue,
+		// 未分發名單 map 轉 slice
+		waiting := []StudentEnroll{}
+		for _, wq := range waitingQueue {
+			waiting = append(waiting, wq)
 		}
-		return c.Render(http.StatusOK, "task/view_dispatch.html", data)
+		// 將結果轉為 JSON 字串，以便儲存在資料庫中
+		dt := map[string]interface{}{
+			"waiting": waiting,
+			"result":  result,
+		}
+		dd, _ := json.Marshal(dt)
+		ee := map[string]interface{}{}
+		json.Unmarshal(dd, &ee)
+		sql := `INSERT INTO dispatch(tid, data) VALUES (:tid, :data)`
+		if _, err := db.NamedExec(sql, map[string]interface{}{"tid": task.ID, "data": string(dd)}); err != nil {
+			fmt.Println("Result insert error = ", err)
+		}
 	}
-	for _, p := range cdm {
-		fmt.Println(p)
+	// 取出分發紀錄列表
+	dispatches := []models.Dispatch{}
+	if err := db.Select(&dispatches, `SELECT * FROM dispatch WHERE tid = $1 ORDER BY created DESC`, task.ID); err != nil {
+		//
 	}
-
+	//cnt := len(dispatches)
+	result := []map[string]interface{}{}
+	/*
+		for i := 0; i < cnt; i++ {
+			ee := map[string]interface{}{}
+			json.Unmarshal([]byte(dispatches[i].Data), &ee)
+			ee["ID"] = dispatches[i].ID
+			ee["Created"] = dispatches[i].Created
+			result = append(result, ee)
+		}
+	*/
+	for _, di := range dispatches {
+		ee := map[string]interface{}{}
+		json.Unmarshal([]byte(di.Data), &ee)
+		ee["ID"] = di.ID
+		ee["Created"] = di.Created
+		result = append(result, ee)
+	}
 
 	data := pongo2.Context{
-		"task": task,
-		"courses": courses, 
-		"enrolls": enrolls,
-		"total": total,
-		"cdm": cdm,
-		"waiting": waitingQueue,
+		"task":   task,
+		"result": result,
 	}
 	return c.Render(http.StatusOK, "task/view_dispatch.html", data)
+}
+
+func (t *TaskController) taskViewDispatchItem(c echo.Context) (err error) {
+	task := c.Get("task")
+	didParam := c.Param("did")
+	dispatch := models.Dispatch{}
+	if did, err := strconv.Atoi(didParam); err != nil {
+		addAlertFlash(c, AlertDanger, "參數型態錯誤！")
+	} else if err = db.Get(&dispatch, `SELECT * FROM dispatch WHERE id = $1`, did); err != nil {
+		addAlertFlash(c, AlertDanger, "無此分發結果！！")
+	}
+	result := map[string]interface{}{}
+	json.Unmarshal([]byte(dispatch.Data), &result)
+	result["Created"] = dispatch.Created
+	data := pongo2.Context{
+		"task":   task,
+		"result": result,
+	}
+	return c.Render(http.StatusOK, "task/view_dispatch_item.html", data)
 }

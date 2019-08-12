@@ -1,22 +1,52 @@
 {% extends "view.html" %}
 
 {% block taskViewContent %}
-<div class="uk-card uk-card-default">
-  <div class="uk-card-header">志願分發</div>
-  <div class="uk-card-body uk-margin" uk-grid>
-    {% for r in result %}
-    <div class="uk-card uk-card-default">
-      <div class="uk-card-header">{{ r.name }} <span class="uk-badge uk-badge-primary">{{ r.Fixed|length }}</span></div>
-      <div class="uk-card-body">
-        <ul class="uk-list">
-          {% for s in r.Fixed %}
-          <li>{{ s.Cno }}{{ s.Seat }} {{ s.Name }}</li>
-          {% endfor %}
-        </ul>
-      </div>
+<form action="" method="post">
+  {{ csrf_token_input|safe }}
+  <div class="uk-card uk-card-default">
+    <div class="uk-card-header uk-flex">
+      <div class="uk-title">志願分發</div>
+      <div class="uk-margin-left"><input type="submit" class="uk-button uk-button-small uk-button-primary"
+          value="新增分發結果" /></div>
     </div>
-    {% endfor %}
+    <div class="uk-card-body">
+      <table class="uk-table uk-table-small uk-table-striped uk-table-hover">
+        <thead>
+          <tr>
+            <th>分發時間</th>
+            <th>分發失敗</th>
+            <th>分發摘要</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for di in result %}
+          <tr>
+            <td>
+              {{ di.Created|date:"2006/01/02 15:04:05" }}
+              <a href="{{ di.ID }}/" class="uk-icon-link" uk-icon="info"></a>
+            </td>
+            <td>
+              {% for w in di.waiting %}
+              <div>{{ w.Cno }}{{ w.Seat }} {{ w.Name }}</div>
+              {% endfor %}
+            </td>
+            <td>
+              <table class="uk-table uk-table-divider">
+                <tbody>
+                  {% for r in di.result %}
+                  <tr>
+                    <td>{{ r.Name }}</td>
+                    <td>{{ r.Fixed|length }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
-</div>
-{{ cdm|length }}
+</form>
 {% endblock %}
