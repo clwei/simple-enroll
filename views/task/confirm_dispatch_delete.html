@@ -1,0 +1,21 @@
+{% extends "../base.html" %}
+
+{% block content %}
+<h1>刪除分發結果</h1>
+<div class="uk-alert uk-alert-danger uk-margin">
+    <p>確定要刪除 <strong>{{ task.Title }}@{{ dispatch.Created|date:"2006/01/02 15:04:05" }}</strong> 的分發結果嗎？</p>
+</div>
+<form action="" method="post">
+    {{ csrf_token_input|safe }}
+    <input id="cancel" type="button" class="uk-button uk-button-small uk-button-default" value="取消" />
+    <input id="submit" type="submit" class="uk-button uk-button-small uk-button-danger" value="刪除" />
+</form>
+{% endblock content %}
+
+{% block footer_scripts %}
+<script>
+document.querySelector('#cancel').addEventListener('click', function(e) {
+    window.history.go(-1);
+});
+</script>
+{% endblock %}

@@ -11,8 +11,8 @@ type routeGroup struct {
 }
 
 var routeGroups = []routeGroup{
-	{&controllers.TaskController{}, "task/"},
-	{&controllers.UserController{}, "user/"},
+	{&controllers.TaskController{}, "/task/"},
+	{&controllers.UserController{}, "/user/"},
 }
 
 func registerControllerRoutes(e *echo.Echo) {

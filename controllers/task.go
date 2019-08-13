@@ -35,9 +35,11 @@ func (t *TaskController) RegisterRoutes(prefix string) {
 	gt.POST("delete/", t.taskDelete, requireStaff)
 	gt.GET("view/", t.taskView, requireStaff)
 	gt.GET("view/enroll/", t.taskViewEnroll, requireStaff)
-	gt.GET("view/dispatch/", t.taskViewDispatch, requireStaff)
+	gt.GET("view/dispatch/", t.taskViewDispatch, requireStaff).Name = "dispatchList"
 	gt.POST("view/dispatch/", t.taskViewDispatch, requireStaff)
 	gt.GET("view/dispatch/:did/", t.taskViewDispatchItem, requireStaff)
+	gt.GET("view/dispatch/:did/delete/", t.taskViewDispatchItemDelete, requireStaff)
+	gt.POST("view/dispatch/:did/delete/", t.taskViewDispatchItemDelete, requireStaff)
 }
 
 //
@@ -201,8 +203,9 @@ func (t *TaskController) taskFormSubmit(c echo.Context) (err error) {
 func (t *TaskController) taskDelete(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
 	if c.Request().Method == http.MethodPost {
-		db.NamedExec(`DELETE FROM enrollment WHERE id = :id`, task)
+		db.NamedExec(`DELETE FROM task WHERE id = :id`, task)
 		db.NamedExec(`DELETE FROM enrollment WHERE tid = :id`, task)
+		db.NamedExec(`DELETE FROM dispatch WHERE tid = :tid`, task)
 		return c.Redirect(http.StatusSeeOther, "/task/")
 	}
 	data := pongo2.Context{
@@ -253,7 +256,7 @@ func getStudentEnrollments(task models.Task) (pool []StudentEnroll, total int) {
 
 func (t *TaskController) taskView(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
-	pool, total := getStudentEnrollments(task)
+	pool, _ := getStudentEnrollments(task)
 	courses := getTaskCourseList(task, []string{})
 	courseStat := map[string][]int{}
 	for _, c := range courses {
@@ -265,11 +268,11 @@ func (t *TaskController) taskView(c echo.Context) (err error) {
 		}
 	}
 	data := pongo2.Context{
-		"task":       task,
-		"seq":        "123456789"[:task.Vnum],
-		"pool":       pool,
-		"total":      total,
-		"courses":    courses,
+		"task": task,
+		"seq":  "123456789"[:task.Vnum],
+		//"pool":       pool,
+		//"total":      total,
+		//"courses":    courses,
 		"courseStat": courseStat,
 	}
 	return c.Render(http.StatusOK, "task/view.html", data)
@@ -473,4 +476,26 @@ func (t *TaskController) taskViewDispatchItem(c echo.Context) (err error) {
 		"result": result,
 	}
 	return c.Render(http.StatusOK, "task/view_dispatch_item.html", data)
+}
+
+func (t *TaskController) taskViewDispatchItemDelete(c echo.Context) (err error) {
+	task := c.Get("task").(models.Task)
+	didParam := c.Param("did")
+	dispatch := models.Dispatch{}
+	if did, err := strconv.Atoi(didParam); err != nil {
+		addAlertFlash(c, AlertDanger, "參數型態錯誤！")
+	} else if err = db.Get(&dispatch, `SELECT * FROM dispatch WHERE id = $1`, did); err != nil {
+		addAlertFlash(c, AlertDanger, "無此分發結果！！")
+	} else {
+		if c.Request().Method == http.MethodPost {
+			db.NamedExec(`DELETE FROM dispatch WHERE id = :id`, dispatch)
+			return c.Redirect(http.StatusSeeOther, e.Reverse("dispatchList", task.ID, dispatch.ID))
+		}
+		data := pongo2.Context{
+			"task":     task,
+			"dispatch": dispatch,
+		}
+		return c.Render(http.StatusOK, "task/confirm_dispatch_delete.html", data)
+	}
+	return c.Render(http.StatusNotFound, "base.html", pongo2.Context{})
 }
