@@ -104,49 +104,39 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 	task := c.Get("task").(models.Task)
 	username := strings.TrimSpace(c.FormValue("username"))
 	selection := strings.TrimSpace(c.FormValue("selection"))
-	// fmt.Println("** taskSubmit ** selection =", selection)
+	// 學生送出選課結果
 	if selection != "" {
 		enrollment := models.Enrollment{
 			Tid:       task.ID,
 			Sid:       username,
 			Selection: selection,
 		}
-		fmt.Println("Tid =", task.ID, "Sid =", username, "Selection =", selection)
 		sql := `INSERT INTO public.enrollment(tid, sid, selection) 
 					VALUES(:tid, :sid, :selection)
 					ON CONFLICT(tid, sid) DO UPDATE
 					SET selection = EXCLUDED.selection`
 		if _, err := db.NamedExec(sql, enrollment); err != nil {
-			fmt.Println("** taskSubmit ** insert error =", err)
+			fmt.Println("\n\n** taskSubmit ** insert error =", err, "\n")
 		}
 		return c.Redirect(http.StatusSeeOther, "/task/")
 	}
-	passwd := strings.TrimSpace(c.FormValue("passwd"))
-	found := false
-
-	stumap := parseStudent(task.Students)
-	var stu Student
-	var ok bool
-	if stu, ok = stumap[username]; ok && passwd == stu.IDno {
-		found = true
-	}
-
+	// 學生登入
 	data := pongo2.Context{
 		"task": task,
 	}
-	if found {
+	passwd := strings.TrimSpace(c.FormValue("passwd"))
+	stumap := parseStudent(task.Students)
+	if stu, ok := stumap[username]; ok && passwd == stu.IDno {
+		// 通過帳號密碼驗設證
 		enrollment := models.Enrollment{}
 		if err := db.Get(&enrollment, "SELECT * FROM enrollment WHERE tid = $1 AND sid = $2", task.ID, username); err != nil {
 		}
 		// scourses: 學生已選課程
 		var scourses []string
-		if enrollment.Selection == "" {
-			scourses = []string{}
-		} else {
+		if enrollment.Selection != "" {
 			scourses = strings.Split(enrollment.Selection, ",")
 		}
 		courses := getTaskCourseList(task, scourses)
-		fmt.Println("** taskSubmit ** courses =", courses)
 		data["courses"] = courses
 		data["stu"] = stu
 		data["username"] = username
@@ -154,6 +144,7 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 		data["scourses"] = scourses
 		return c.Render(http.StatusOK, "task/enroll.html", data)
 	}
+	// 登入失敗!!
 	addAlertFlash(c, AlertDanger, "學號或身分證號有誤！請重新登入！")
 	return c.Render(http.StatusOK, "task/login.html", data)
 }
@@ -161,7 +152,6 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 //---------------------------------------------------------------------------
 // 以下需行政人員或管理員權限
 //---------------------------------------------------------------------------
-
 func (t *TaskController) taskForm(c echo.Context) error {
 	task := c.Get("task").(models.Task)
 	opTitle := "新增選課任務"
@@ -223,23 +213,24 @@ func (t *TaskController) taskDelete(c echo.Context) (err error) {
 
 // Student ...
 type Student struct {
-	Sid  string
-	Cno  string
-	Seat string
-	Name string
-	IDno string
+	Sid    string // 學號
+	Cno    string // 班級
+	Seat   string // 座號
+	Name   string // 姓名
+	IDno   string // 身分證號
+	VIndex int    // 選課分發志願
 }
 
 // StuMap ...
-type StuMap map[string]Student
+type StuMap map[string]*Student
 
 func parseStudent(raw string) StuMap {
 	smap := StuMap{}
 	lines := strings.Split(raw, "\r\n")
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		stu := Student{fields[0], fields[1], fields[2], fields[3], fields[4]}
-		smap[stu.Sid] = stu
+		stu := Student{fields[0], fields[1], fields[2], fields[3], fields[4], 0}
+		smap[stu.Sid] = &stu
 	}
 	return smap
 }
@@ -255,7 +246,7 @@ func getStudentEnrollments(task models.Task) (pool []StudentEnroll, total int) {
 	db.Select(&enrollments, `SELECT * FROM enrollment WHERE tid = $1`, task.ID)
 	smap := parseStudent(task.Students)
 	for _, enroll := range enrollments {
-		pool = append(pool, StudentEnroll{smap[enroll.Sid], strings.Split(enroll.Selection, ",")})
+		pool = append(pool, StudentEnroll{*smap[enroll.Sid], strings.Split(enroll.Selection, ",")})
 	}
 	return pool, len(smap)
 }
@@ -268,16 +259,11 @@ func (t *TaskController) taskView(c echo.Context) (err error) {
 	for _, c := range courses {
 		courseStat[c.Name] = make([]int, task.Vnum)
 	}
-	fmt.Println(courseStat)
 	for _, e := range pool {
-		fmt.Println(e)
 		for i, c := range e.Selection {
-			fmt.Println(i, c)
 			courseStat[c][i]++
-			fmt.Println(courseStat)
 		}
 	}
-	fmt.Println(courseStat)
 	data := pongo2.Context{
 		"task":       task,
 		"seq":        "123456789"[:task.Vnum],
@@ -330,7 +316,7 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 		cdm := map[string]*CourseDispatchNode{}
 		waitingQueue := map[string]StudentEnroll{}
 		for sid, stu := range smap {
-			waitingQueue[sid] = StudentEnroll{stu, []string{}}
+			waitingQueue[sid] = StudentEnroll{*stu, []string{}}
 		}
 		for _, enroll := range enrolls {
 			waitingQueue[enroll.Sid] = enroll
@@ -359,7 +345,7 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 				}
 				vCourseName := enroll.Selection[vIndex]
 				if len(cdm[vCourseName].Fixed) < cdm[vCourseName].upperbound {
-					cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, smap[sid])
+					cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, *smap[sid])
 				}
 			}
 			// 階段2：檢查每一門課程，若確認選修人數與考慮選修人數合計超過課程上限，則由考慮選修名單中隨機剔除多餘人選
@@ -377,7 +363,8 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 						end -= len(cdn.Susp) + len(cdn.Fixed) - cdn.upperbound
 					}
 					for _, stu := range cdn.Susp[:end] {
-						cdn.Fixed = append(cdn.Fixed, stu)
+						stu.VIndex = vIndex + 1            // 記錄該生的分發志願序
+						cdn.Fixed = append(cdn.Fixed, stu) // 將該生加入課程的正式選修名單
 						delete(waitingQueue, stu.Sid)
 					}
 					// 處理完了，清空考慮選修名單，待下一志願序使用
@@ -391,13 +378,16 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 		}
 		// 啟用強制分發
 		if dispatch.Forced {
+			// 先找出尚未額滿的課程
 			availableCourses := []string{}
 			for _, cdn := range cdm {
 				if len(cdn.Fixed) < cdn.upperbound {
 					availableCourses = append(availableCourses, cdn.Name)
 				}
 			}
+			// 尚未分發的人，優先分發至未達開課人數的課程，或人數較少的課程
 			for sid := range waitingQueue {
+				// 每處理完一人，重新排序課程
 				sort.SliceStable(availableCourses, func(i, j int) bool {
 					ni, nj := cdm[availableCourses[i]], cdm[availableCourses[j]]
 					if (len(ni.Fixed) < ni.upperbound) != (len(nj.Fixed) < nj.upperbound) {
@@ -405,8 +395,10 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 					}
 					return len(ni.Fixed)-ni.lowerbound < len(nj.Fixed)-nj.lowerbound
 				})
-				cdm[availableCourses[0]].Fixed = append(cdm[availableCourses[0]].Fixed, smap[sid])
+				smap[sid].VIndex = task.Vnum + 1
+				cdm[availableCourses[0]].Fixed = append(cdm[availableCourses[0]].Fixed, *smap[sid])
 			}
+			// 統一加總評估資料
 			ev.Count[task.Vnum] += len(waitingQueue)
 			ev.Success += len(waitingQueue)
 			ev.Score += (task.Vnum + 1) * len(waitingQueue)
@@ -435,10 +427,6 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 			"ev":      ev,
 		}
 		dd, _ := json.Marshal(dt)
-		/*
-			ee := map[string]interface{}{}
-			json.Unmarshal(dd, &ee)
-		*/
 		dispatch.Data = string(dd)
 		sql := `INSERT INTO dispatch(tid, data, forced) VALUES (:tid, :data, :forced)`
 		if _, err := db.NamedExec(sql, dispatch); err != nil {

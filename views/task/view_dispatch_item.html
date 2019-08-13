@@ -22,6 +22,7 @@
                         <td>{{ s.Cno }}{{ s.Seat }}</td>
                         <td>{{ s.Sid }}</td>
                         <td>{{ s.Name }}</td>
+                        <td>{% if s.VIndex|floatformat:0 == task.Vnum+1 %}*{% else %}{{ s.VIndex|stringformat:"%.0f" }}{% endif %}</td>
                       </tr>
                       {% endfor %}
                     </tbody>
