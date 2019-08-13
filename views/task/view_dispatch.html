@@ -5,13 +5,13 @@
   {{ csrf_token_input|safe }}
   <div class="uk-card uk-card-default">
     <div class="uk-card-header uk-flex uk-flex-between">
-      <div class="uk-title">志願分發</div>
+      <h2 class="uk-title">志願分發</h2>
       <div class="uk-alig uk-flex-middle uk-flex">
         <span uk-tooltip="未選填志願，或依志願分發失敗者，在依志願分發結束後由系統強制分發"><input type="checkbox" name="forced" id="forced" value="true" /> <label class="uk-text" for="forced">啟用強制分發</label></span>
         <input type="submit" class="uk-button uk-button-small uk-button-primary uk-margin-left" value="新增分發結果" />
       </div>
     </div>
-    <div class="uk-card-body">
+    <div class="uk-card-body uk-padding-small">
       <table class="uk-table uk-table-small uk-table-striped uk-table-hover uk-text-center">
         <thead>
           <tr>

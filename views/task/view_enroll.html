@@ -2,7 +2,9 @@
 
 {% block taskViewContent %}
 <div class="uk-card uk-card-default">
-  <div class="uk-card-header">學生志願序</div>
+  <div class="uk-card-head">
+    <h2 class="uk-card-header">學生志願序</h2>
+  </div>
   <div class="uk-card-body">
     <table class="uk-table uk-table-striped uk-table-small">
       <thead>
@@ -35,9 +37,9 @@
       </tbody>
     </table>
   </div>
+  <div class="uk-card-footer">
+    已選課人數 {{ pool|length }} / 需選課人數 {{ total }}
+  </div>
 </div>
-<div class="uk-card">
 
-</div>
-已選課人數 {{ pool|length }} / 需選課人數 {{ total }}
 {% endblock %}
