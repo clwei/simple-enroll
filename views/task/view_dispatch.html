@@ -4,18 +4,31 @@
 <form action="" method="post">
   {{ csrf_token_input|safe }}
   <div class="uk-card uk-card-default">
-    <div class="uk-card-header uk-flex">
+    <div class="uk-card-header uk-flex uk-flex-between">
       <div class="uk-title">志願分發</div>
-      <div class="uk-margin-left"><input type="submit" class="uk-button uk-button-small uk-button-primary"
-          value="新增分發結果" /></div>
+      <div class="uk-alig uk-flex-middle uk-flex">
+        <span uk-tooltip="未選填志願，或依志願分發失敗者，在依志願分發結束後由系統強制分發"><input type="checkbox" name="forced" id="forced" value="true" /> <label class="uk-text" for="forced">啟用強制分發</label></span>
+        <input type="submit" class="uk-button uk-button-small uk-button-primary uk-margin-left" value="新增分發結果" />
+      </div>
     </div>
     <div class="uk-card-body">
-      <table class="uk-table uk-table-small uk-table-striped uk-table-hover">
+      <table class="uk-table uk-table-small uk-table-striped uk-table-hover uk-text-center">
         <thead>
           <tr>
-            <th>分發時間</th>
-            <th>分發失敗</th>
-            <th>分發摘要</th>
+            <th rowspan="2" class="uk-table-expand uk-text-center">分發時間</th>
+            <th rowspan="2" class="uk-table-shrink uk-text-center">啟用強制分發</th>
+            <th rowspan="2" class="uk-width-auto uk-text-center">分發失敗</th>
+            <th rowspan="2" class="uk-width-auto uk-text-center">分發成功</th>
+            <th colspan="{{ task.Vnum+1 }}" class="uk-width-auto uk-text-center">志願分發人數</th>
+            <th rowspan="2" class="uk-width-auto uk-text-center">分發成功<br/>平均分發志願序</th>
+          </tr>
+          <tr>
+            {% with format=task.Vnum|stringformat:"%%.%.ds" %}
+              {% for vi in "123456789"|stringformat:format %}
+              <th class="uk-table-shrink uk-text-center">第{{ vi }}志願</th>
+              {% endfor %}
+              <th class="uk-table-shrink uk-text-center">系統強制分發</th>
+            {% endwith %}
           </tr>
         </thead>
         <tbody>
@@ -25,23 +38,13 @@
               {{ di.Created|date:"2006/01/02 15:04:05" }}
               <a href="{{ di.ID }}/" class="uk-icon-link" uk-icon="info"></a>
             </td>
-            <td>
-              {% for w in di.waiting %}
-              <div>{{ w.Cno }}{{ w.Seat }} {{ w.Name }}</div>
-              {% endfor %}
-            </td>
-            <td>
-              <table class="uk-table uk-table-divider">
-                <tbody>
-                  {% for r in di.result %}
-                  <tr>
-                    <td>{{ r.Name }}</td>
-                    <td>{{ r.Fixed|length }}</td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </td>
+            <td>{{ di.Forced|yesno:"<span uk-icon='check'></span>,,"|safe }}</td>
+            <td>{{ di.ev.Failed|stringformat:"%.0f" }}</td>
+            <td>{{ di.ev.Success|stringformat:"%.0f" }}</td>
+            {% for vc in di.ev.Count %}
+            <td>{{ vc|stringformat:"%.0f" }}</td>
+            {% endfor %}
+            <td>{{ di.ev.AvgScore|stringformat:"%.2f" }}</td>
           </tr>
           {% endfor %}
         </tbody>

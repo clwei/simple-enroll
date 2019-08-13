@@ -27,8 +27,8 @@ func (t *TaskController) RegisterRoutes(prefix string) {
 	g.GET("create/", t.taskForm, requireStaff)
 	g.POST("create/", t.taskFormSubmit, requireStaff)
 	gt := g.Group(":tid/", requireValidTaskID)
-	gt.GET("", t.taskLogin)
-	gt.POST("", t.taskSubmit)
+	gt.GET("", t.taskLogin, requireValidTime)
+	gt.POST("", t.taskSubmit, requireValidTime)
 	gt.GET("edit/", t.taskForm, requireStaff)
 	gt.POST("edit/", t.taskFormSubmit, requireStaff)
 	gt.GET("delete/", t.taskDelete, requireStaff)
@@ -146,6 +146,7 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 			scourses = strings.Split(enrollment.Selection, ",")
 		}
 		courses := getTaskCourseList(task, scourses)
+		fmt.Println("** taskSubmit ** courses =", courses)
 		data["courses"] = courses
 		data["stu"] = stu
 		data["username"] = username
@@ -189,7 +190,7 @@ func trimHeaderAndSpace(src string, headerPrefix string) (dst string) {
 
 func (t *TaskController) taskFormSubmit(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
-	c.Bind(task)
+	c.Bind(&task)
 	task.Tstart, _ = time.Parse("2006-01-02 15:04-0700", c.FormValue("tstart")+"+0800")
 	task.Tend, _ = time.Parse("2006-01-02 15:04-0700", c.FormValue("tend")+"+0800")
 	task.Students = trimHeaderAndSpace(task.Students, "學號")
@@ -320,12 +321,17 @@ type CourseDispatchNode struct {
 func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
 	if c.Request().Method == http.MethodPost {
+		var dispatch models.Dispatch
+		c.Bind(&dispatch)
 		courses := getTaskCourseList(task, []string{})
 		enrolls, _ := getStudentEnrollments(task)
 		smap := parseStudent(task.Students)
 		result := []CourseDispatchNode{}
 		cdm := map[string]*CourseDispatchNode{}
 		waitingQueue := map[string]StudentEnroll{}
+		for sid, stu := range smap {
+			waitingQueue[sid] = StudentEnroll{stu, []string{}}
+		}
 		for _, enroll := range enrolls {
 			waitingQueue[enroll.Sid] = enroll
 		}
@@ -336,9 +342,21 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 		//
 		// 分發: 依第 1 志願, 第 2 志願, ... 處理
 		//
+		type EVScore struct {
+			Count    []int   // 每個志願的分發人數
+			Score    int     // 總分發志願權重(志願序*分發人數的加總)
+			AvgScore float32 // 平均分發志願序
+			Success  int     // 成功分發人數
+			Failed   int     // 分發失敗人數
+		}
+		ev := EVScore{}
+		ev.Count = make([]int, task.Vnum+1)
 		for vIndex := 0; vIndex < task.Vnum; vIndex++ {
 			// 階段1：先將所有未分發學生依目前處理的志願序，先分發到課程的考慮選修名單
 			for sid, enroll := range waitingQueue {
+				if len(enroll.Selection) <= vIndex {
+					continue
+				}
 				vCourseName := enroll.Selection[vIndex]
 				if len(cdm[vCourseName].Fixed) < cdm[vCourseName].upperbound {
 					cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, smap[sid])
@@ -364,12 +382,42 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 					}
 					// 處理完了，清空考慮選修名單，待下一志願序使用
 					cdn.Susp = []Student{}
+					// 評估用
+					ev.Count[vIndex] += end
+					ev.Success += end
+					ev.Score += (vIndex + 1) * end
 				}
 			}
 		}
+		// 啟用強制分發
+		if dispatch.Forced {
+			availableCourses := []string{}
+			for _, cdn := range cdm {
+				if len(cdn.Fixed) < cdn.upperbound {
+					availableCourses = append(availableCourses, cdn.Name)
+				}
+			}
+			for sid := range waitingQueue {
+				sort.SliceStable(availableCourses, func(i, j int) bool {
+					ni, nj := cdm[availableCourses[i]], cdm[availableCourses[j]]
+					if (len(ni.Fixed) < ni.upperbound) != (len(nj.Fixed) < nj.upperbound) {
+						return len(ni.Fixed) < ni.upperbound
+					}
+					return len(ni.Fixed)-ni.lowerbound < len(nj.Fixed)-nj.lowerbound
+				})
+				cdm[availableCourses[0]].Fixed = append(cdm[availableCourses[0]].Fixed, smap[sid])
+			}
+			ev.Count[task.Vnum] += len(waitingQueue)
+			ev.Success += len(waitingQueue)
+			ev.Score += (task.Vnum + 1) * len(waitingQueue)
+			waitingQueue = map[string]StudentEnroll{}
+		}
+		ev.Failed = len(waitingQueue)
+		ev.AvgScore = float32(ev.Score) / float32(ev.Success)
+
 		// 將 map 轉為 slice 以便在 template 中使用
 		for _, p := range cdm {
-			// 順便依班級座號將選修名單排序
+			// 依班級座號將選修名單排序
 			sort.SliceStable(p.Fixed, func(i, j int) bool {
 				return (p.Fixed[i].Cno < p.Fixed[j].Cno) || ((p.Fixed[i].Cno == p.Fixed[j].Cno) && p.Fixed[i].Seat < p.Fixed[j].Seat)
 			})
@@ -384,12 +432,16 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 		dt := map[string]interface{}{
 			"waiting": waiting,
 			"result":  result,
+			"ev":      ev,
 		}
 		dd, _ := json.Marshal(dt)
-		ee := map[string]interface{}{}
-		json.Unmarshal(dd, &ee)
-		sql := `INSERT INTO dispatch(tid, data) VALUES (:tid, :data)`
-		if _, err := db.NamedExec(sql, map[string]interface{}{"tid": task.ID, "data": string(dd)}); err != nil {
+		/*
+			ee := map[string]interface{}{}
+			json.Unmarshal(dd, &ee)
+		*/
+		dispatch.Data = string(dd)
+		sql := `INSERT INTO dispatch(tid, data, forced) VALUES (:tid, :data, :forced)`
+		if _, err := db.NamedExec(sql, dispatch); err != nil {
 			fmt.Println("Result insert error = ", err)
 		}
 	}
@@ -398,22 +450,14 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 	if err := db.Select(&dispatches, `SELECT * FROM dispatch WHERE tid = $1 ORDER BY created DESC`, task.ID); err != nil {
 		//
 	}
-	//cnt := len(dispatches)
 	result := []map[string]interface{}{}
-	/*
-		for i := 0; i < cnt; i++ {
-			ee := map[string]interface{}{}
-			json.Unmarshal([]byte(dispatches[i].Data), &ee)
-			ee["ID"] = dispatches[i].ID
-			ee["Created"] = dispatches[i].Created
-			result = append(result, ee)
-		}
-	*/
+	// 將紀錄中的 JSON 字串轉回資料結構
 	for _, di := range dispatches {
 		ee := map[string]interface{}{}
 		json.Unmarshal([]byte(di.Data), &ee)
 		ee["ID"] = di.ID
 		ee["Created"] = di.Created
+		ee["Forced"] = di.Forced
 		result = append(result, ee)
 	}
 

@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/clwei/simple-enroll/models"
 	"github.com/flosch/pongo2"
@@ -86,23 +87,18 @@ func setSessionValue(c echo.Context, key string, val interface{}) error {
 func getSessionValue(c echo.Context, key string, defval interface{}) (val interface{}) {
 	sess := getSession(c)
 	var ok bool
-	if val, ok = sess.Values["key"]; !ok {
+	if val, ok = sess.Values[key]; !ok {
 		val = defval
 	}
 	return val
 }
 
+func getCurrUser(c echo.Context) (user models.User) {
+	return getSessionValue(c, "user", models.User{}).(models.User)
+}
+
 func requirePermission(c echo.Context, isStaff, isAdmin bool) (ok bool) {
-	sess := getSession(c)
-	tuser, ok := sess.Values["user"]
-	if !ok {
-		tuser = models.User{}
-	}
-	var user models.User
-	if user, ok = tuser.(models.User); !ok {
-		fmt.Println("**type assertion error**", ok)
-		user = models.User{}
-	}
+	user := getCurrUser(c)
 	if user.IsAdmin {
 		return true
 	}
@@ -123,6 +119,9 @@ func requireStaff(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if !requirePermission(c, true, false) {
 			return c.Render(http.StatusOK, "base.html", pongo2.Context{})
+		}
+		if c.Get("task") == nil {
+			c.Set("task", models.Task{})
 		}
 		return next(c)
 	}
@@ -148,29 +147,15 @@ func requireValidTaskID(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-/*
-func importUserFromString(raw string) {
-	fmt.Println("** importUserFromString **")
-	lines := strings.Split(raw, "\n")
-	sql1 := `
-		INSERT INTO public.user(username, passwd, cno, seat, name, is_staff, is_admin)
-			VALUES`
-	sql2 := `ON CONFLICT(username)
-				DO UPDATE
-					SET (passwd, cno, seat, name) = (EXCLUDED.passwd, EXCLUDED.cno, EXCLUDED.seat, EXCLUDED.name)`
-	values := []string{}
-	for _, line := range lines {
-		fields := strings.Split(line, "\t")
-		if len(fields) < 5 || fields[0] == "學號" {
-			continue
+func requireValidTime(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		user := getSessionValue(c, "user", models.User{}).(models.User)
+		task := c.Get("task").(models.Task)
+		currTime := time.Now()
+		if !user.IsAdmin && !user.IsStaff && (currTime.Before(task.Tstart) || currTime.After(task.Tend)) {
+			addAlertFlash(c, AlertDanger, "目前非選課時間！！")
+			return c.Render(http.StatusForbidden, "base.html", pongo2.Context{})
 		}
-		// fmt.Println(fields)
-		var hash []byte
-		hash, _ = bcrypt.GenerateFromPassword([]byte(fields[4]), bcrypt.DefaultCost)
-		values = append(values, fmt.Sprintf("('%s', '%s', %s, %s, '%s', false, false)", fields[0], string(hash), fields[1], fields[2], fields[3]))
+		return next(c)
 	}
-	sql := sql1 + strings.Join(values, ",") + sql2
-	result, err := db.NamedExec(sql, models.User{})
-	fmt.Println("\tdb.Exec err =", err, ", result =", result)
 }
-*/
