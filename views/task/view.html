@@ -20,19 +20,19 @@
     <div class="uk-card-body">
       <table class="uk-table uk-table-small uk-table-striped uk-table-hover">
         <thead>
-          <tr>
-            <th>課程名稱</th>
+          <tr class="uk-light uk-background-secondary">
+            <th class="uk-table-shrink uk-text-right">課程名稱</th>
             {% for index in seq %}
-            <th>第 {{ index }} 志願</th>
+            <th class="uk-text-center">第 {{ index }} 志願</th>
             {% endfor %}
           </tr>
         </thead>
         <tbody>
           {% for key, s in courseStat %}
           <tr>
-            <td>{{ key }}</td>
+            <td class="uk-text-nowrap uk-text-right">{{ key }}</td>
             {% for n in s %}
-            <td>{{ n }}</td>
+            <td class="uk-text-center">{{ n }}</td>
             {% endfor %}
           </tr>
           {% endfor %}

@@ -249,7 +249,11 @@ func getStudentEnrollments(task models.Task) (pool []StudentEnroll, total int) {
 	db.Select(&enrollments, `SELECT * FROM enrollment WHERE tid = $1`, task.ID)
 	smap := parseStudent(task.Students)
 	for _, enroll := range enrollments {
-		pool = append(pool, StudentEnroll{*smap[enroll.Sid], strings.Split(enroll.Selection, ",")})
+		selection := strings.Split(enroll.Selection, ",")
+		if len(selection) > task.Vnum {
+			selection = selection[:task.Vnum]
+		}
+		pool = append(pool, StudentEnroll{*smap[enroll.Sid], selection})
 	}
 	return pool, len(smap)
 }
@@ -264,7 +268,9 @@ func (t *TaskController) taskView(c echo.Context) (err error) {
 	}
 	for _, e := range pool {
 		for i, c := range e.Selection {
-			courseStat[c][i]++
+			if i < task.Vnum {
+				courseStat[c][i]++
+			}
 		}
 	}
 	data := pongo2.Context{
@@ -423,6 +429,9 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 		for _, wq := range waitingQueue {
 			waiting = append(waiting, wq)
 		}
+		sort.SliceStable(waiting, func(i, j int) bool {
+			return (waiting[i].Cno < waiting[j].Cno) || ((waiting[i].Cno == waiting[j].Cno) && (waiting[i].Seat < waiting[j].Seat))
+		})
 		// 將結果轉為 JSON 字串，以便儲存在資料庫中
 		dt := map[string]interface{}{
 			"waiting": waiting,
