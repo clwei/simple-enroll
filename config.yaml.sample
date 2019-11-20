@@ -1,0 +1,9 @@
+app:
+  port: 8080
+db:
+  type: 'postgres'
+  host: 'localhost'
+  port: 5432
+  user: 'simplequery'
+  passwd: 'simplequery'
+  database: 'enroll'
