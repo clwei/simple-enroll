@@ -5,8 +5,12 @@
   {{ csrf_token_input|safe }}
   <div class="uk-card uk-card-default">
     <div class="uk-card-header uk-flex uk-flex-between">
-      <div class="uk-text uk-text-muted uk-text-small"><span class="uk-icon" uk-icon="clock"></span> 分發時間：{{ result.Created|date:"2006/01/02 15:04:05" }}</div>
-      <div class="uk-text uk-text-muted uk-text-small">學生姓名後的數字代表其分發志願序，* 表示為系統強制分發 <a href="delete/" class="uk-button uk-button-danger uk-button-small uk-margin-left">刪除</a></div>
+      <div class="uk-text uk-text-muted uk-text-small"><span class="uk-icon" uk-icon="clock"></span> 分發時間：{{ created|date:"2006/01/02 15:04:05" }}</div>
+      <div class="uk-text uk-text-muted uk-text-small">
+        學生姓名後的數字代表其分發志願序，* 表示為系統強制分發
+        <a href="download/" class="uk-button uk-button-primary uk-button-small uk-margin-left">下載</a>
+        <a href="delete/" class="uk-button uk-button-danger uk-button-small">刪除</a>
+      </div>
     </div>
     <div class="uk-card-body uk-padding-small">
       <h2 class="uk-heading-line uk-text-center uk-alert uk-alert-primary">課程分發名單</h2>

@@ -7,35 +7,37 @@
   <a href="create/" class="uk-button uk-button-small uk-button-primary uk-margin-left"><span uk-icon="plus-circle"></span> 新增選課任務</a>
   {% endif %}
 </div>
-<table class="uk-table uk-table-divider uk-table-small">
-  <thead>
-    <tr>
-      <th class="uk-table-expand">選課任務名稱</th>
-      <th class="uk-table-shrink" style="white-space:nowrap">志願<br/>數量</th>
-      <th class="uk-table-shrink">起始時間</th>
-      <th class="uk-table-shrink">截止時間</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for task in tasks %}
-    <tr>
-      <td class="uk-flex">
-        <a href="{{ task.ID }}/">{{ task.Title }}</a>
-        {% if cuser.IsAdmin || cuser.IsStaff %}
-        <div class="uk-margin-left">
-          <a href="{{ task.ID }}/edit/" class="edit uk-icon-link" uk-icon="pencil"></a>
-          <a href="{{ task.ID }}/view/" class="info uk-icon-link" uk-icon="info"></a>
-          <a href="{{ task.ID }}/delete/" class="trash uk-icon-link uk-text-danger" uk-icon="trash"></a>
-        </div>
-        {% endif %}
-      </td>
-      <td class="uk-text-center">{{ task.Vnum }}</td>
-      <td class="uk-text-muted uk-text-small">{{ task.Tstart|date:"2006-01-02 15:04" }}</td>
-      <td class="uk-text-muted uk-text-small">{{ task.Tend|date:"2006-01-02 15:04" }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="uk-overflow-auto">
+  <table class="uk-table uk-table-striped uk-table-divider uk-table-small">
+    <thead>
+      <tr>
+        <th class="uk-table-expand">選課任務名稱</th>
+        <th class="uk-table-shrink" style="white-space:nowrap">志願<br/>數量</th>
+        <th class="uk-table-shrink">起始時間</th>
+        <th class="uk-table-shrink">截止時間</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for task in tasks %}
+      <tr>
+        <td class="uk-flex">
+          <a href="{{ task.ID }}/">{{ task.Title }}</a>
+          {% if cuser.IsAdmin || cuser.IsStaff %}
+          <div class="uk-margin-left">
+            <a href="{{ task.ID }}/edit/" class="edit uk-icon-link" uk-icon="pencil"></a>
+            <a href="{{ task.ID }}/view/" class="info uk-icon-link" uk-icon="info"></a>
+            <a href="{{ task.ID }}/delete/" class="trash uk-icon-link uk-text-danger" uk-icon="trash"></a>
+          </div>
+          {% endif %}
+        </td>
+        <td class="uk-text-center">{{ task.Vnum }}</td>
+        <td class="uk-text-muted uk-text-small">{{ task.Tstart|date:"2006-01-02 15:04" }}</td>
+        <td class="uk-text-muted uk-text-small">{{ task.Tend|date:"2006-01-02 15:04" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}
 
 {% block footer_scripts %}

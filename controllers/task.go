@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/clwei/simple-enroll/models"
 	"github.com/flosch/pongo2"
 	"github.com/labstack/echo"
@@ -40,6 +42,7 @@ func (t *TaskController) RegisterRoutes(prefix string) {
 	gt.GET("view/dispatch/:did/", t.taskViewDispatchItem, requireStaff)
 	gt.GET("view/dispatch/:did/delete/", t.taskViewDispatchItemDelete, requireStaff)
 	gt.POST("view/dispatch/:did/delete/", t.taskViewDispatchItemDelete, requireStaff)
+	gt.GET("view/dispatch/:did/download/", t.taskViewDispatchItemDownload, requireStaff)
 }
 
 //
@@ -76,9 +79,9 @@ func (t *TaskController) taskLogin(c echo.Context) error {
 
 // TaskCourse ...
 type TaskCourse struct {
-	Name       string
-	lowerbound int
-	upperbound int
+	Name       string `json:Name`
+	lowerbound int    `json:lowerbound`
+	upperbound int    `json:upperbound`
 }
 
 // getTaskCourseList 取得選課任務的課程清單
@@ -313,6 +316,20 @@ type CourseDispatchNode struct {
 	Susp  []Student // 考慮選修名單
 }
 
+type EVScore struct {
+	Count    []int   // 每個志願的分發人數
+	Score    int     // 總分發志願權重(志願序*分發人數的加總)
+	AvgScore float32 // 平均分發志願序
+	Success  int     // 成功分發人數
+	Failed   int     // 分發失敗人數
+}
+
+type CourseDispatchResult struct {
+	ev      EVScore
+	result  []CourseDispatchNode
+	waiting []StudentEnroll
+}
+
 func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
 	if c.Request().Method == http.MethodPost {
@@ -337,13 +354,6 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 		//
 		// 分發: 依第 1 志願, 第 2 志願, ... 處理
 		//
-		type EVScore struct {
-			Count    []int   // 每個志願的分發人數
-			Score    int     // 總分發志願權重(志願序*分發人數的加總)
-			AvgScore float32 // 平均分發志願序
-			Success  int     // 成功分發人數
-			Failed   int     // 分發失敗人數
-		}
 		ev := EVScore{}
 		ev.Count = make([]int, task.Vnum+1)
 		for vIndex := 0; vIndex < task.Vnum; vIndex++ {
@@ -481,10 +491,49 @@ func (t *TaskController) taskViewDispatchItem(c echo.Context) (err error) {
 	json.Unmarshal([]byte(dispatch.Data), &result)
 	result["Created"] = dispatch.Created
 	data := pongo2.Context{
-		"task":   task,
-		"result": result,
+		"task":    task,
+		"result":  result,
+		"created": dispatch.Created,
 	}
 	return c.Render(http.StatusOK, "task/view_dispatch_item.html", data)
+}
+
+func (t *TaskController) taskViewDispatchItemDownload(c echo.Context) (err error) {
+	task := c.Get("task").(models.Task)
+	didParam := c.Param("did")
+	dispatch := models.Dispatch{}
+	if did, err := strconv.Atoi(didParam); err != nil {
+		addAlertFlash(c, AlertDanger, "參數型態錯誤！")
+	} else if err = db.Get(&dispatch, `SELECT * FROM dispatch WHERE id = $1`, did); err != nil {
+		addAlertFlash(c, AlertDanger, "無此分發結果！！")
+	}
+	result := map[string]interface{}{}
+	json.Unmarshal([]byte(dispatch.Data), &result)
+	tmp, _ := json.Marshal(result["result"])
+	r := []CourseDispatchNode{}
+	json.Unmarshal(tmp, &r)
+	tmp, _ = json.Marshal(result["waiting"])
+	w := []StudentEnroll{}
+	json.Unmarshal(tmp, &w)
+	f := excelize.NewFile()
+	fail_sheet := "分發失敗名單"
+	f.SetSheetName(f.GetSheetName(1), fail_sheet)
+	f.SetSheetRow(fail_sheet, "A1", &[]string{"班級", "座號", "學號", "姓名"})
+	for rid, stu := range w {
+		f.SetSheetRow(fail_sheet, fmt.Sprintf("A%d", rid+2), &[]interface{}{stu.Cno, stu.Seat, stu.Sid, stu.Name})
+	}
+	for _, cr := range r {
+		f.NewSheet(cr.Name)
+		f.SetSheetRow(cr.Name, "A1", &[]string{"班級", "座號", "學號", "姓名", "分發志願序"})
+		for di, stu := range cr.Fixed {
+			f.SetSheetRow(cr.Name, fmt.Sprintf("A%d", di+2), &[]interface{}{stu.Cno, stu.Seat, stu.Sid, stu.Name, stu.VIndex})
+		}
+	}
+	fname := fmt.Sprintf("%s@%s.xlsx", task.Title, dispatch.Created.Format("2006-01-02_15-04"))
+	f.SaveAs("static/" + fname)
+	err = c.Attachment("static/"+fname, fname)
+	os.Remove("static/" + fname)
+	return err
 }
 
 func (t *TaskController) taskViewDispatchItemDelete(c echo.Context) (err error) {

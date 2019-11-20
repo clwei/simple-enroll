@@ -57,7 +57,10 @@ func main() {
 	e := echo.New()
 	e.Renderer = newRenderer(true)
 	e.HTTPErrorHandler = customHTTPErrorHandler
-	e.Use(middleware.Logger())
+	//e.Use(middleware.Logger())
+	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+		Format: "${time_rfc3339} ${status} ${method} ${uri} - ${remote_ip}\n",
+	}))
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},

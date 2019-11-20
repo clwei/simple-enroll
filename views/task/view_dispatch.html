@@ -37,6 +37,7 @@
             <td>
               {{ di.Created|date:"2006/01/02 15:04:05" }}
               <a href="{{ di.ID }}/" class="uk-icon-link" uk-icon="search" title="查看分發結果"></a>
+              <a href="{{ di.ID }}/download/" class="uk-icon-link" uk-icon="download" title="下載分發結果"></a>
               <a href="{{ di.ID }}/delete/" class="uk-icon-link uk-text-danger" uk-icon="trash" title="刪除分發結果"></a>
             </td>
             <td>{{ di.Forced|yesno:"<span uk-icon='check'></span>,,"|safe }}</td>
