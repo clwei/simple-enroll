@@ -55,7 +55,7 @@ func main() {
 	gob.Register(models.User{})
 
 	e := echo.New()
-	e.Renderer = newRenderer(true)
+	e.Renderer = newRenderer(false)
 	e.HTTPErrorHandler = customHTTPErrorHandler
 	//e.Use(middleware.Logger())
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{

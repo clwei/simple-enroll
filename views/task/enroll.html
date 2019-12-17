@@ -15,9 +15,9 @@
     <div class="uk-child-width-1-2@m" uk-grid>
         <div>
             <div class="uk-card uk-card-small uk-card-default">
-                <div class="uk-card-header uk-flex">
-                    <div class="uk-card-title">{{ stu.Cno }} 班 {{ stu.Seat }} 號 {{ stu.Name }} # 已選課程</div>
-                    <div class="uk-badge uk-badge-default uk-margin-small-left"><span id="selcount"></span> / <span id="total"></span></div>
+                <div class="uk-card-header">
+                    <div class="uk-card-title">{{ stu.Cno }} 班 {{ stu.Seat }} 號 {{ stu.Name }} # 已選項目</div>
+                    <div class="uk-card-badge uk-label"><span id="selcount"></span> / <span id="total"></span></div>
                 </div>
                 <ol id="selected-courses" class="uk-list uk-list-striped course-options" uk-sortable="group: courseEnroll">
                     {% for course in scourses %}
@@ -32,7 +32,7 @@
         <div>
             <div class="uk-card uk-card-small uk-card-default">
                 <div class="uk-card-header">
-                    <div class="uk-card-title">候選課程</div>
+                    <div class="uk-card-title">候選項目</div>
                 </div>
                 <ul id="candidate-courses" class="uk-list uk-list-striped course-options" uk-sortable="group: courseEnroll">
                     {% for course in courses %}

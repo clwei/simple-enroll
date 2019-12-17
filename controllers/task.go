@@ -48,7 +48,15 @@ func (t *TaskController) RegisterRoutes(prefix string) {
 //
 func (t *TaskController) taskList(c echo.Context) error {
 	tasks := []models.Task{}
-	db.Select(&tasks, "SELECT * FROM task ORDER BY tstart desc")
+	user := getCurrUser(c)
+	sql := "SELECT * FROM task"
+	if !user.IsStaff && !user.IsAdmin {
+		sql += " WHERE tstart <= now() AND now() <= tend"
+	}
+	sql += " ORDER BY tstart desc"
+	if err := db.Select(&tasks, sql); err != nil {
+		fmt.Println(sql, err)
+	}
 	data := pongo2.Context{
 		"tasks": tasks,
 	}
@@ -131,7 +139,14 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 	}
 	passwd := strings.TrimSpace(c.FormValue("passwd"))
 	stumap := parseStudent(task.Students)
+	fmt.Println(stumap)
+	forbid := parseStudent(task.Forbidden)
 	if stu, ok := stumap[username]; ok && passwd == stu.IDno {
+		// 是否在禁止選課名單中？
+		if fstu, ok := forbid[username]; ok {
+			addAlertFlash(c, AlertDanger, "抱歉！您被禁止參與此項選課/選社任務，禁止原因為「"+fstu.IDno+"」")
+			return c.Render(http.StatusOK, "task/login.html", data)
+		}
 		// 通過帳號密碼驗設證
 		enrollment := models.Enrollment{}
 		if err := db.Get(&enrollment, "SELECT * FROM enrollment WHERE tid = $1 AND sid = $2", task.ID, username); err != nil {
@@ -190,12 +205,13 @@ func (t *TaskController) taskFormSubmit(c echo.Context) (err error) {
 	task.Tend, _ = time.Parse("2006-01-02 15:04-0700", c.FormValue("tend")+"+0800")
 	task.Students = trimHeaderAndSpace(task.Students, "學號")
 	task.Courses = trimHeaderAndSpace(task.Courses, "課程名稱")
+	task.Forbidden = trimHeaderAndSpace(task.Forbidden, "學號")
 
 	var sql string
 	if task.ID > 0 {
-		sql = `UPDATE task SET (title, vnum, tstart, tend, description, students, courses) = (:title, :vnum, :tstart, :tend, :description, :students, :courses) WHERE id=:id`
+		sql = `UPDATE task SET (title, vnum, tstart, tend, description, students, courses, forbidden) = (:title, :vnum, :tstart, :tend, :description, :students, :courses, :forbidden) WHERE id=:id`
 	} else {
-		sql = `INSERT INTO task(title, vnum, tstart, tend, description, students, courses) VALUES(:title, :vnum, :tstart, :tend, :description, :students, :courses)`
+		sql = `INSERT INTO task(title, vnum, tstart, tend, description, students, courses, forbidden) VALUES(:title, :vnum, :tstart, :tend, :description, :students, :courses, :forbidden)`
 	}
 	if _, err := db.NamedExec(sql, task); err != nil {
 		//
@@ -316,6 +332,7 @@ type CourseDispatchNode struct {
 	Susp  []Student // 考慮選修名單
 }
 
+// EVScore ...
 type EVScore struct {
 	Count    []int   // 每個志願的分發人數
 	Score    int     // 總分發志願權重(志願序*分發人數的加總)
@@ -324,6 +341,7 @@ type EVScore struct {
 	Failed   int     // 分發失敗人數
 }
 
+// CourseDispatchResult ...
 type CourseDispatchResult struct {
 	ev      EVScore
 	result  []CourseDispatchNode
@@ -516,11 +534,11 @@ func (t *TaskController) taskViewDispatchItemDownload(c echo.Context) (err error
 	w := []StudentEnroll{}
 	json.Unmarshal(tmp, &w)
 	f := excelize.NewFile()
-	fail_sheet := "分發失敗名單"
-	f.SetSheetName(f.GetSheetName(1), fail_sheet)
-	f.SetSheetRow(fail_sheet, "A1", &[]string{"班級", "座號", "學號", "姓名"})
+	failSheet := "分發失敗名單"
+	f.SetSheetName(f.GetSheetName(1), failSheet)
+	f.SetSheetRow(failSheet, "A1", &[]string{"班級", "座號", "學號", "姓名"})
 	for rid, stu := range w {
-		f.SetSheetRow(fail_sheet, fmt.Sprintf("A%d", rid+2), &[]interface{}{stu.Cno, stu.Seat, stu.Sid, stu.Name})
+		f.SetSheetRow(failSheet, fmt.Sprintf("A%d", rid+2), &[]interface{}{stu.Cno, stu.Seat, stu.Sid, stu.Name})
 	}
 	for _, cr := range r {
 		f.NewSheet(cr.Name)

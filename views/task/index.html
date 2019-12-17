@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="uk-flex uk-flex-middle">
-  <h1>選課任務列表</h1>
+  <h1>選課選社任務列表</h1>
   {% if cuser.IsAdmin || cuser.IsStaff %}
   <a href="create/" class="uk-button uk-button-small uk-button-primary uk-margin-left"><span uk-icon="plus-circle"></span> 新增選課任務</a>
   {% endif %}
@@ -11,7 +11,7 @@
   <table class="uk-table uk-table-striped uk-table-divider uk-table-small">
     <thead>
       <tr>
-        <th class="uk-table-expand">選課任務名稱</th>
+        <th class="uk-table-expand">選課選社任務</th>
         <th class="uk-table-shrink" style="white-space:nowrap">志願<br/>數量</th>
         <th class="uk-table-shrink">起始時間</th>
         <th class="uk-table-shrink">截止時間</th>

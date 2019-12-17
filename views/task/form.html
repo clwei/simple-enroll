@@ -6,9 +6,9 @@
     {{ csrf_token_input|safe }}
     <input type="hidden" id="id" name="id" value="{{ task.ID }}" />
     <div class="uk-margin-small">
-        <label for="title" class="uk-form-label">選課任務名稱</label>
+        <label for="title" class="uk-form-label">選課選社任務名稱</label>
         <div class="uk-form-controls">
-            <input id="title" name="title" type="text" class="uk-input" value="{{ task.Title }}" placeholder="請輸入選課任務名稱..." />
+            <input id="title" name="title" type="text" class="uk-input" value="{{ task.Title }}" placeholder="請輸入選課選社任務名稱..." />
         </div>
     </div>
     <div class="uk-margin-small">
@@ -42,6 +42,19 @@
                例：
                <pre>10735001	101	01	王oo	X123456789<br/>10735002	101	02	林oo	X223456789</pre>
                <div>也可下載「<a href="{{ static }}/EnrollTaskData.xlsx">範本檔</a>」，填好相關資料後將「學生」資料表內容複製貼上於此欄位</div>
+            </div>
+        </div>
+    </div>
+    <div class="uk-margin-small">
+        <label for="forbidden" class="uk-form-label">禁止選課選社名單</label>
+        <div class="uk-form-controls">
+            <textarea name="forbidden"" id="forbidden" cols="30" rows="10" class="uk-textarea">{{ task.Forbidden}}</textarea>
+            <div class="uk-text uk-text-small uk-text-muted uk-alert">
+               資料輸入格式如下，每筆資料一行：
+               <pre>學號    班級    座號    姓名    禁止原因</pre>
+               例：
+               <pre>10735001	101	01	王oo	校隊：管樂社<br/>10735002	101	02	林oo	校隊：合唱團</pre>
+               <div>也可下載「<a href="{{ static }}/EnrollTaskData.xlsx">範本檔</a>」，填好相關資料後將「禁止選課選社名單」資料表內容複製貼上於此欄位</div>
             </div>
         </div>
     </div>
