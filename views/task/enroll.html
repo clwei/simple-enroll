@@ -19,7 +19,10 @@
                     <div class="uk-card-title">{{ stu.Cno }} 班 {{ stu.Seat }} 號 {{ stu.Name }} # 已選項目</div>
                     <div class="uk-card-badge uk-label"><span id="selcount"></span> / <span id="total"></span></div>
                 </div>
-                <ol id="selected-courses" class="uk-list uk-list-striped course-options" uk-sortable="group: courseEnroll">
+                <div class="uk-text-muted uk-text-small uk-padding-small">
+                    將項目拖曳至本區來加選。<br/>項目名稱前方的數字代表該項目是第幾志願，可以上下拖曳來改變志願序。
+                </div>
+                <ol id="selected-courses" class="uk-list uk-list-striped course-options uk-margin-remove-top" uk-sortable="group: courseEnroll">
                     {% for course in scourses %}
                     <li>{{ course }}</li>
                     {% endfor %}
@@ -33,6 +36,9 @@
             <div class="uk-card uk-card-small uk-card-default">
                 <div class="uk-card-header">
                     <div class="uk-card-title">候選項目</div>
+                </div>
+                <div class="uk-text-muted uk-text-small uk-padding-small">
+                    將項目拖曳至本區來退選。
                 </div>
                 <ul id="candidate-courses" class="uk-list uk-list-striped course-options" uk-sortable="group: courseEnroll">
                     {% for course in courses %}

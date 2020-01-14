@@ -139,7 +139,6 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 	}
 	passwd := strings.TrimSpace(c.FormValue("passwd"))
 	stumap := parseStudent(task.Students)
-	fmt.Println(stumap)
 	forbid := parseStudent(task.Forbidden)
 	if stu, ok := stumap[username]; ok && passwd == stu.IDno {
 		// 是否在禁止選課名單中？
@@ -263,18 +262,39 @@ type StudentEnroll struct {
 	Selection []string
 }
 
-func getStudentEnrollments(task models.Task) (pool []StudentEnroll, total int) {
+func getStudentEnrollments(task models.Task) (pool []StudentEnroll, estu []Student) {
 	enrollments := []models.Enrollment{}
 	db.Select(&enrollments, `SELECT * FROM enrollment WHERE tid = $1`, task.ID)
 	smap := parseStudent(task.Students)
+	forbid := parseStudent(task.Forbidden)
+	for sid := range forbid {
+		if _, ok := smap[sid]; ok {
+			delete(smap, sid)
+		}
+	}
 	for _, enroll := range enrollments {
+		// 若已先選課，事後被排入排除名單，則略過其選課資料
+		if _, ok := forbid[enroll.Sid]; ok {
+
+			continue
+		}
 		selection := strings.Split(enroll.Selection, ",")
 		if len(selection) > task.Vnum {
 			selection = selection[:task.Vnum]
 		}
 		pool = append(pool, StudentEnroll{*smap[enroll.Sid], selection})
+		delete(smap, enroll.Sid)
 	}
-	return pool, len(smap)
+	for _, stu := range smap {
+		estu = append(estu, *stu)
+	}
+	sort.SliceStable(estu, func(i, j int) bool {
+		if estu[i].Cno == estu[j].Cno {
+			return estu[i].Seat < estu[j].Seat
+		}
+		return estu[i].Cno < estu[j].Cno
+	})
+	return pool, estu
 }
 
 func (t *TaskController) taskView(c echo.Context) (err error) {
@@ -305,17 +325,19 @@ func (t *TaskController) taskView(c echo.Context) (err error) {
 
 func (t *TaskController) taskViewEnroll(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
-	pool, total := getStudentEnrollments(task)
+	pool, estu := getStudentEnrollments(task)
 	sort.SliceStable(pool, func(i, j int) bool {
 		if pool[i].Cno == pool[j].Cno {
 			return pool[i].Seat < pool[j].Seat
 		}
 		return pool[i].Cno < pool[j].Cno
 	})
+	total := len(pool) + len(estu)
 	data := pongo2.Context{
 		"task":  task,
 		"seq":   "123456789"[:task.Vnum],
 		"pool":  pool,
+		"estu":  estu,
 		"total": total,
 	}
 	return c.Render(http.StatusOK, "task/view_enroll.html", data)
@@ -356,6 +378,13 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 		courses := getTaskCourseList(task, []string{})
 		enrolls, _ := getStudentEnrollments(task)
 		smap := parseStudent(task.Students)
+		forbid := parseStudent(task.Forbidden)
+		// 排除選修名單
+		for sid := range forbid {
+			if _, ok := smap[sid]; ok {
+				delete(smap, sid)
+			}
+		}
 		result := []CourseDispatchNode{}
 		cdm := map[string]*CourseDispatchNode{}
 		waitingQueue := map[string]StudentEnroll{}

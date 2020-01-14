@@ -6,6 +6,7 @@
     <h2 class="uk-card-header">學生志願序</h2>
   </div>
   <div class="uk-card-body">
+    <h2 class="uk-heading-line uk-text-center uk-alert uk-alert-primary">學生志願序</h2>
     <table class="uk-table uk-table-striped uk-table-small">
       <thead>
         <tr>
@@ -36,6 +37,12 @@
         {% endfor %}
       </tbody>
     </table>
+    <h2 class="uk-heading-line uk-text-center uk-alert uk-alert-danger">未選填名單</h2>
+    <div class="waiting uk-column-1-6 uk-column-divider">
+      {% for w in estu %}
+      <div>{{ w.Cno }}{{ w.Seat }} {{ w.Name }}</div>
+      {% endfor %}
+    </div>
   </div>
   <div class="uk-card-footer">
     已選課人數 {{ pool|length }} / 需選課人數 {{ total }}
