@@ -251,8 +251,10 @@ func parseStudent(raw string) StuMap {
 	lines := strings.Split(raw, "\r\n")
 	for _, line := range lines {
 		fields := strings.Split(line, "\t")
-		stu := Student{fields[0], fields[1], fields[2], fields[3], fields[4], 0}
-		smap[stu.Sid] = &stu
+		if len(fields) > 1 {
+			stu := Student{fields[0], fields[1], fields[2], fields[3], fields[4], 0}
+			smap[stu.Sid] = &stu
+		}
 	}
 	return smap
 }
@@ -372,145 +374,162 @@ type CourseDispatchResult struct {
 	waiting []StudentEnroll
 }
 
+func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
+	courses := getTaskCourseList(task, []string{})
+	enrolls, _ := getStudentEnrollments(task)
+	smap := parseStudent(task.Students)
+	forbid := parseStudent(task.Forbidden)
+	// 排除選修名單
+	for sid := range forbid {
+		if _, ok := smap[sid]; ok {
+			delete(smap, sid)
+		}
+	}
+	result := []CourseDispatchNode{}
+	cdm := map[string]*CourseDispatchNode{}
+	waitingQueue := map[string]StudentEnroll{}
+	for sid, stu := range smap {
+		waitingQueue[sid] = StudentEnroll{*stu, []string{}}
+	}
+	for _, enroll := range enrolls {
+		waitingQueue[enroll.Sid] = enroll
+	}
+	for _, course := range courses {
+		cdm[course.Name] = &CourseDispatchNode{course, []Student{}, []Student{}, course.upperbound}
+	}
+	rand.Seed(time.Now().UnixNano())
+	//
+	// 分發: 依第 1 志願, 第 2 志願, ... 處理
+	//
+	ev := EVScore{}
+	ev.Count = make([]int, task.Vnum+1)
+	for vIndex := 0; vIndex < task.Vnum; vIndex++ {
+		// 階段1：先將所有未分發學生依目前處理的志願序，先分發到課程的考慮選修名單
+		for sid, enroll := range waitingQueue {
+			if len(enroll.Selection) <= vIndex {
+				continue
+			}
+			vCourseName := enroll.Selection[vIndex]
+			if len(cdm[vCourseName].Fixed) < cdm[vCourseName].upperbound {
+				cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, *smap[sid])
+			}
+		}
+
+		// 統計課程缺額
+		for cid, cdn := range cdm {
+			cdm[cid].EmptySlots = int(math.Max(0, float64(cdn.upperbound-len(cdn.Fixed)-len(cdn.Susp))))
+		}
+
+		// 計算學生下一志額的缺額來當作排序依據
+		priority := map[string]int{}
+		// fmt.Println("#######", vIndex, task.Vnum)
+		for sid, enroll := range waitingQueue {
+			// fmt.Printf("\t%s%s%s: ", enroll.Cno, enroll.Seat, enroll.Name)
+			// fmt.Println(enroll.Selection)
+			if vIndex >= (len(enroll.Selection)-1) || vIndex >= task.Vnum-1 {
+				priority[sid] = 0
+			} else {
+				priority[sid] = cdm[enroll.Selection[vIndex+1]].EmptySlots*10 + (rand.Int() % 4)
+			}
+		}
+
+		// 階段2：檢查每一門課程，若確認選修人數與考慮選修人數合計超過課程上限，則由考慮選修名單中剔除多餘人選
+		for cid, cdn := range cdm {
+			if len(cdn.Susp) > 0 {
+				// 加上考慮名單的人數會爆班 => 依學生下一個志願的缺額數多的優先從考慮名單中剔除(取前面需要的個數就好)
+				if len(cdn.Susp) > cdn.upperbound-len(cdn.Fixed) {
+					sort.Slice(cdm[cid].Susp, func(i, j int) bool {
+						return priority[cdm[cid].Susp[i].Sid] < priority[cdm[cid].Susp[j].Sid]
+					})
+				}
+				// fmt.Println(cdn.Name, cdn.upperbound, len(cdn.Fixed), len(cdn.Susp))
+				// for _, stu := range cdm[cid].Susp {
+				// 	fmt.Printf("\t%s%s%s: %d\n", stu.Cno, stu.Seat, stu.Name, priority[stu.Sid])
+				// }
+				// 取出需要的名單，加進確認選修清單，並將其移出未分發學生(waitingQueue)清單
+				end := len(cdn.Susp)
+				if len(cdn.Susp)+len(cdn.Fixed) > cdn.upperbound {
+					end -= len(cdn.Susp) + len(cdn.Fixed) - cdn.upperbound
+				}
+				for _, stu := range cdn.Susp[:end] {
+					stu.VIndex = vIndex + 1            // 記錄該生的分發志願序
+					cdn.Fixed = append(cdn.Fixed, stu) // 將該生加入課程的正式選修名單
+					delete(waitingQueue, stu.Sid)
+				}
+				// 處理完了，清空考慮選修名單，待下一志願序使用
+				cdn.Susp = []Student{}
+				// 評估用
+				ev.Count[vIndex] += end
+				ev.Success += end
+				ev.Score += (vIndex + 1) * end
+			}
+		}
+	}
+	// 啟用強制分發
+	if forcedDispatch {
+		// 先找出尚未額滿的課程
+		availableCourses := []string{}
+		for _, cdn := range cdm {
+			if len(cdn.Fixed) < cdn.upperbound {
+				availableCourses = append(availableCourses, cdn.Name)
+			}
+		}
+		// 尚未分發的人，優先分發至未達開課人數的課程，或人數較少的課程
+		for sid := range waitingQueue {
+			// 每處理完一人，重新排序課程
+			sort.SliceStable(availableCourses, func(i, j int) bool {
+				ni, nj := cdm[availableCourses[i]], cdm[availableCourses[j]]
+				if (len(ni.Fixed) < ni.upperbound) != (len(nj.Fixed) < nj.upperbound) {
+					return len(ni.Fixed) < ni.upperbound
+				}
+				return len(ni.Fixed)-ni.lowerbound < len(nj.Fixed)-nj.lowerbound
+			})
+			smap[sid].VIndex = task.Vnum + 1
+			cdm[availableCourses[0]].Fixed = append(cdm[availableCourses[0]].Fixed, *smap[sid])
+		}
+		// 統一加總評估資料
+		ev.Count[task.Vnum] += len(waitingQueue)
+		ev.Success += len(waitingQueue)
+		ev.Score += (task.Vnum + 1) * len(waitingQueue)
+		waitingQueue = map[string]StudentEnroll{}
+	}
+	ev.Failed = len(waitingQueue)
+	ev.AvgScore = float32(ev.Score) / float32(ev.Success)
+	// 將 map 轉為 slice 以便在 template 中使用
+	for _, p := range cdm {
+		// 依班級座號將選修名單排序
+		sort.SliceStable(p.Fixed, func(i, j int) bool {
+			return (p.Fixed[i].Cno < p.Fixed[j].Cno) || ((p.Fixed[i].Cno == p.Fixed[j].Cno) && p.Fixed[i].Seat < p.Fixed[j].Seat)
+		})
+		result = append(result, *p)
+	}
+	// 未分發名單 map 轉 slice
+	waiting := []StudentEnroll{}
+	for _, wq := range waitingQueue {
+		waiting = append(waiting, wq)
+	}
+	return CourseDispatchResult{ev, result, waiting}
+}
+
 func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
+	var dispatch models.Dispatch
+	c.Bind(&dispatch)
 	if c.Request().Method == http.MethodPost {
-		var dispatch models.Dispatch
-		c.Bind(&dispatch)
-		courses := getTaskCourseList(task, []string{})
-		enrolls, _ := getStudentEnrollments(task)
-		smap := parseStudent(task.Students)
-		forbid := parseStudent(task.Forbidden)
-		// 排除選修名單
-		for sid := range forbid {
-			if _, ok := smap[sid]; ok {
-				delete(smap, sid)
-			}
-		}
-		result := []CourseDispatchNode{}
-		cdm := map[string]*CourseDispatchNode{}
-		waitingQueue := map[string]StudentEnroll{}
-		for sid, stu := range smap {
-			waitingQueue[sid] = StudentEnroll{*stu, []string{}}
-		}
-		for _, enroll := range enrolls {
-			waitingQueue[enroll.Sid] = enroll
-		}
-		for _, course := range courses {
-			cdm[course.Name] = &CourseDispatchNode{course, []Student{}, []Student{}, course.upperbound}
-		}
-		rand.Seed(time.Now().UnixNano())
-		//
-		// 分發: 依第 1 志願, 第 2 志願, ... 處理
-		//
-		ev := EVScore{}
-		ev.Count = make([]int, task.Vnum+1)
-		for vIndex := 0; vIndex < task.Vnum; vIndex++ {
-			// 階段1：先將所有未分發學生依目前處理的志願序，先分發到課程的考慮選修名單
-			for sid, enroll := range waitingQueue {
-				if len(enroll.Selection) <= vIndex {
-					continue
-				}
-				vCourseName := enroll.Selection[vIndex]
-				if len(cdm[vCourseName].Fixed) < cdm[vCourseName].upperbound {
-					cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, *smap[sid])
+		bestDispatch := _taskDispatch(task, dispatch.Forced)
+		for i := 0; i < 1000; i++ {
+			disp := _taskDispatch(task, dispatch.Forced)
+			for j := 0; j < len(disp.ev.Count); j++ {
+				if disp.ev.Count[j] > bestDispatch.ev.Count[j] {
+					bestDispatch = disp
+					break
 				}
 			}
+		}
+		waiting := bestDispatch.waiting
+		result := bestDispatch.result
+		ev := bestDispatch.ev
 
-			// 統計課程缺額
-			for cid, cdn := range cdm {
-				cdm[cid].EmptySlots = int(math.Max(0, float64(cdn.upperbound-len(cdn.Fixed)-len(cdn.Susp))))
-			}
-
-			// 計算學生下一志額的缺額來當作排序依據
-			priority := map[string]int{}
-			fmt.Println("#######", vIndex, task.Vnum)
-			for sid, enroll := range waitingQueue {
-				fmt.Printf("\t%s%s%s: ", enroll.Cno, enroll.Seat, enroll.Name)
-				fmt.Println(enroll.Selection)
-				if vIndex >= (len(enroll.Selection)-1) || vIndex >= task.Vnum-1 {
-					priority[sid] = 0
-				} else {
-					priority[sid] = cdm[enroll.Selection[vIndex+1]].EmptySlots*10 + (rand.Int() % 4)
-				}
-			}
-
-			// 階段2：檢查每一門課程，若確認選修人數與考慮選修人數合計超過課程上限，則由考慮選修名單中剔除多餘人選
-			for cid, cdn := range cdm {
-				if len(cdn.Susp) > 0 {
-					// 加上考慮名單的人數會爆班 => 依學生下一個志願的缺額數多的優先從考慮名單中剔除(取前面需要的個數就好)
-					if len(cdn.Susp) > cdn.upperbound-len(cdn.Fixed) {
-						sort.Slice(cdm[cid].Susp, func(i, j int) bool {
-							return priority[cdm[cid].Susp[i].Sid] < priority[cdm[cid].Susp[j].Sid]
-						})
-					}
-					fmt.Println(cdn.Name, cdn.upperbound, len(cdn.Fixed), len(cdn.Susp))
-					for _, stu := range cdm[cid].Susp {
-						fmt.Printf("\t%s%s%s: %d\n", stu.Cno, stu.Seat, stu.Name, priority[stu.Sid])
-					}
-					// 取出需要的名單，加進確認選修清單，並將其移出未分發學生(waitingQueue)清單
-					end := len(cdn.Susp)
-					if len(cdn.Susp)+len(cdn.Fixed) > cdn.upperbound {
-						end -= len(cdn.Susp) + len(cdn.Fixed) - cdn.upperbound
-					}
-					for _, stu := range cdn.Susp[:end] {
-						stu.VIndex = vIndex + 1            // 記錄該生的分發志願序
-						cdn.Fixed = append(cdn.Fixed, stu) // 將該生加入課程的正式選修名單
-						delete(waitingQueue, stu.Sid)
-					}
-					// 處理完了，清空考慮選修名單，待下一志願序使用
-					cdn.Susp = []Student{}
-					// 評估用
-					ev.Count[vIndex] += end
-					ev.Success += end
-					ev.Score += (vIndex + 1) * end
-				}
-			}
-		}
-		// 啟用強制分發
-		if dispatch.Forced {
-			// 先找出尚未額滿的課程
-			availableCourses := []string{}
-			for _, cdn := range cdm {
-				if len(cdn.Fixed) < cdn.upperbound {
-					availableCourses = append(availableCourses, cdn.Name)
-				}
-			}
-			// 尚未分發的人，優先分發至未達開課人數的課程，或人數較少的課程
-			for sid := range waitingQueue {
-				// 每處理完一人，重新排序課程
-				sort.SliceStable(availableCourses, func(i, j int) bool {
-					ni, nj := cdm[availableCourses[i]], cdm[availableCourses[j]]
-					if (len(ni.Fixed) < ni.upperbound) != (len(nj.Fixed) < nj.upperbound) {
-						return len(ni.Fixed) < ni.upperbound
-					}
-					return len(ni.Fixed)-ni.lowerbound < len(nj.Fixed)-nj.lowerbound
-				})
-				smap[sid].VIndex = task.Vnum + 1
-				cdm[availableCourses[0]].Fixed = append(cdm[availableCourses[0]].Fixed, *smap[sid])
-			}
-			// 統一加總評估資料
-			ev.Count[task.Vnum] += len(waitingQueue)
-			ev.Success += len(waitingQueue)
-			ev.Score += (task.Vnum + 1) * len(waitingQueue)
-			waitingQueue = map[string]StudentEnroll{}
-		}
-		ev.Failed = len(waitingQueue)
-		ev.AvgScore = float32(ev.Score) / float32(ev.Success)
-
-		// 將 map 轉為 slice 以便在 template 中使用
-		for _, p := range cdm {
-			// 依班級座號將選修名單排序
-			sort.SliceStable(p.Fixed, func(i, j int) bool {
-				return (p.Fixed[i].Cno < p.Fixed[j].Cno) || ((p.Fixed[i].Cno == p.Fixed[j].Cno) && p.Fixed[i].Seat < p.Fixed[j].Seat)
-			})
-			result = append(result, *p)
-		}
-		// 未分發名單 map 轉 slice
-		waiting := []StudentEnroll{}
-		for _, wq := range waitingQueue {
-			waiting = append(waiting, wq)
-		}
 		sort.SliceStable(waiting, func(i, j int) bool {
 			return (waiting[i].Cno < waiting[j].Cno) || ((waiting[i].Cno == waiting[j].Cno) && (waiting[i].Seat < waiting[j].Seat))
 		})
