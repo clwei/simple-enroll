@@ -385,7 +385,6 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 			delete(smap, sid)
 		}
 	}
-	result := []CourseDispatchNode{}
 	cdm := map[string]*CourseDispatchNode{}
 	waitingQueue := map[string]StudentEnroll{}
 	for sid, stu := range smap {
@@ -429,7 +428,7 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 			if vIndex >= (len(enroll.Selection)-1) || vIndex >= task.Vnum-1 {
 				priority[sid] = 0
 			} else {
-				priority[sid] = cdm[enroll.Selection[vIndex+1]].EmptySlots*10 + (rand.Int() % 4)
+				priority[sid] = cdm[enroll.Selection[vIndex+1]].EmptySlots //*1000 + (rand.Int() % 10)
 			}
 		}
 
@@ -438,14 +437,12 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 			if len(cdn.Susp) > 0 {
 				// 加上考慮名單的人數會爆班 => 依學生下一個志願的缺額數多的優先從考慮名單中剔除(取前面需要的個數就好)
 				if len(cdn.Susp) > cdn.upperbound-len(cdn.Fixed) {
+					// rand.Shuffle(len(cdn.Susp), func(i, j int) { cdn.Susp[i], cdn.Susp[j] = cdn.Susp[j], cdn.Susp[i] })
 					sort.Slice(cdm[cid].Susp, func(i, j int) bool {
 						return priority[cdm[cid].Susp[i].Sid] < priority[cdm[cid].Susp[j].Sid]
 					})
 				}
-				// fmt.Println(cdn.Name, cdn.upperbound, len(cdn.Fixed), len(cdn.Susp))
-				// for _, stu := range cdm[cid].Susp {
-				// 	fmt.Printf("\t%s%s%s: %d\n", stu.Cno, stu.Seat, stu.Name, priority[stu.Sid])
-				// }
+
 				// 取出需要的名單，加進確認選修清單，並將其移出未分發學生(waitingQueue)清單
 				end := len(cdn.Susp)
 				if len(cdn.Susp)+len(cdn.Fixed) > cdn.upperbound {
@@ -496,11 +493,8 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 	ev.Failed = len(waitingQueue)
 	ev.AvgScore = float32(ev.Score) / float32(ev.Success)
 	// 將 map 轉為 slice 以便在 template 中使用
+	result := []CourseDispatchNode{}
 	for _, p := range cdm {
-		// 依班級座號將選修名單排序
-		sort.SliceStable(p.Fixed, func(i, j int) bool {
-			return (p.Fixed[i].Cno < p.Fixed[j].Cno) || ((p.Fixed[i].Cno == p.Fixed[j].Cno) && p.Fixed[i].Seat < p.Fixed[j].Seat)
-		})
 		result = append(result, *p)
 	}
 	// 未分發名單 map 轉 slice
@@ -516,23 +510,32 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 	var dispatch models.Dispatch
 	c.Bind(&dispatch)
 	if c.Request().Method == http.MethodPost {
+		// 分發 1000 次挑最好的(愈後面的志願序人數愈少愈好)
 		bestDispatch := _taskDispatch(task, dispatch.Forced)
-		for i := 0; i < 1000; i++ {
+		for i := 0; i < 999; i++ {
 			disp := _taskDispatch(task, dispatch.Forced)
-			for j := 0; j < len(disp.ev.Count); j++ {
-				if disp.ev.Count[j] > bestDispatch.ev.Count[j] {
+			for j := len(disp.ev.Count) - 1; j >= 0 && disp.ev.Count[j] <= bestDispatch.ev.Count[j]; j-- {
+				if disp.ev.Count[j] < bestDispatch.ev.Count[j] {
 					bestDispatch = disp
 					break
 				}
 			}
 		}
 		waiting := bestDispatch.waiting
-		result := bestDispatch.result
 		ev := bestDispatch.ev
+		// 將課程選修名單依班級座號排序，以方便 Template 顯示
+		result := []CourseDispatchNode{}
+		for _, p := range bestDispatch.result {
+			sort.SliceStable(p.Fixed, func(i, j int) bool {
+				return (p.Fixed[i].Cno < p.Fixed[j].Cno) || ((p.Fixed[i].Cno == p.Fixed[j].Cno) && p.Fixed[i].Seat < p.Fixed[j].Seat)
+			})
+			result = append(result, p)
+		}
 
 		sort.SliceStable(waiting, func(i, j int) bool {
 			return (waiting[i].Cno < waiting[j].Cno) || ((waiting[i].Cno == waiting[j].Cno) && (waiting[i].Seat < waiting[j].Seat))
 		})
+
 		// 將結果轉為 JSON 字串，以便儲存在資料庫中
 		dt := map[string]interface{}{
 			"waiting": waiting,
@@ -550,6 +553,7 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 	dispatches := []models.Dispatch{}
 	if err := db.Select(&dispatches, `SELECT * FROM dispatch WHERE tid = $1 ORDER BY created DESC`, task.ID); err != nil {
 		//
+		fmt.Println(err)
 	}
 	result := []map[string]interface{}{}
 	// 將紀錄中的 JSON 字串轉回資料結構
