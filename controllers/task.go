@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -350,8 +351,9 @@ func (t *TaskController) taskViewEnroll(c echo.Context) (err error) {
 // CourseDispatchNode ...
 type CourseDispatchNode struct {
 	TaskCourse
-	Fixed []Student // 確認選修名單
-	Susp  []Student // 考慮選修名單
+	Fixed      []Student // 確認選修名單
+	Susp       []Student // 考慮選修名單
+	EmptySlots int       // 剩餘空缺
 }
 
 // EVScore ...
@@ -395,7 +397,7 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 			waitingQueue[enroll.Sid] = enroll
 		}
 		for _, course := range courses {
-			cdm[course.Name] = &CourseDispatchNode{course, []Student{}, []Student{}}
+			cdm[course.Name] = &CourseDispatchNode{course, []Student{}, []Student{}, course.upperbound}
 		}
 		rand.Seed(time.Now().UnixNano())
 		//
@@ -414,14 +416,37 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 					cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, *smap[sid])
 				}
 			}
-			// 階段2：檢查每一門課程，若確認選修人數與考慮選修人數合計超過課程上限，則由考慮選修名單中隨機剔除多餘人選
-			for _, cdn := range cdm {
+
+			// 統計課程缺額
+			for cid, cdn := range cdm {
+				cdm[cid].EmptySlots = int(math.Max(0, float64(cdn.upperbound-len(cdn.Fixed)-len(cdn.Susp))))
+			}
+
+			// 計算學生下一志額的缺額來當作排序依據
+			priority := map[string]int{}
+			fmt.Println("#######", vIndex, task.Vnum)
+			for sid, enroll := range waitingQueue {
+				fmt.Printf("\t%s%s%s: ", enroll.Cno, enroll.Seat, enroll.Name)
+				fmt.Println(enroll.Selection)
+				if vIndex >= (len(enroll.Selection)-1) || vIndex >= task.Vnum-1 {
+					priority[sid] = 0
+				} else {
+					priority[sid] = cdm[enroll.Selection[vIndex+1]].EmptySlots*10 + (rand.Int() % 4)
+				}
+			}
+
+			// 階段2：檢查每一門課程，若確認選修人數與考慮選修人數合計超過課程上限，則由考慮選修名單中剔除多餘人選
+			for cid, cdn := range cdm {
 				if len(cdn.Susp) > 0 {
-					// 加上考慮名單的人數會爆班 => 隨機從考慮名單中剔除(洗牌，再取前面需要的個數就好)
+					// 加上考慮名單的人數會爆班 => 依學生下一個志願的缺額數多的優先從考慮名單中剔除(取前面需要的個數就好)
 					if len(cdn.Susp) > cdn.upperbound-len(cdn.Fixed) {
-						for k := 0; k < 7; k++ {
-							rand.Shuffle(len(cdn.Susp), func(i, j int) { cdn.Susp[i], cdn.Susp[j] = cdn.Susp[j], cdn.Susp[i] })
-						}
+						sort.Slice(cdm[cid].Susp, func(i, j int) bool {
+							return priority[cdm[cid].Susp[i].Sid] < priority[cdm[cid].Susp[j].Sid]
+						})
+					}
+					fmt.Println(cdn.Name, cdn.upperbound, len(cdn.Fixed), len(cdn.Susp))
+					for _, stu := range cdm[cid].Susp {
+						fmt.Printf("\t%s%s%s: %d\n", stu.Cno, stu.Seat, stu.Name, priority[stu.Sid])
 					}
 					// 取出需要的名單，加進確認選修清單，並將其移出未分發學生(waitingQueue)清單
 					end := len(cdn.Susp)
