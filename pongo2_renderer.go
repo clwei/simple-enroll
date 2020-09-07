@@ -7,9 +7,9 @@ import (
 
 	"github.com/clwei/simple-enroll/models"
 	"github.com/flosch/pongo2"
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo-contrib/session"
-	"github.com/labstack/echo/middleware"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 // Renderer ...

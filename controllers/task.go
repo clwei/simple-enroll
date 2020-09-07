@@ -15,7 +15,7 @@ import (
 	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/clwei/simple-enroll/models"
 	"github.com/flosch/pongo2"
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 )
 
 // TaskController 選課任務

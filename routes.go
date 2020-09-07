@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/clwei/simple-enroll/controllers"
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 )
 
 type routeGroup struct {

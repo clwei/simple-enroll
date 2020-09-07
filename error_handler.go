@@ -6,7 +6,7 @@ import (
 
 	"github.com/clwei/simple-enroll/controllers"
 	"github.com/flosch/pongo2"
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 )
 
 func customHTTPErrorHandler(err error, c echo.Context) {

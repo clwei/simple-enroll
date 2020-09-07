@@ -13,8 +13,8 @@ import (
 
 	"github.com/clwei/simple-enroll/controllers"
 	"github.com/clwei/simple-enroll/models"
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	_ "github.com/lib/pq"
 	"github.com/spf13/viper"
 )
