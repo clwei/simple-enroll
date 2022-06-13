@@ -543,6 +543,7 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 			"ev":      ev,
 		}
 		dd, _ := json.Marshal(dt)
+		dispatch.Tid = task.ID
 		dispatch.Data = string(dd)
 		sql := `INSERT INTO dispatch(tid, data, forced) VALUES (:tid, :data, :forced)`
 		if _, err := db.NamedExec(sql, dispatch); err != nil {
