@@ -507,9 +507,9 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 
 func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
-	var dispatch models.Dispatch
-	c.Bind(&dispatch)
 	if c.Request().Method == http.MethodPost {
+		var dispatch models.Dispatch
+		c.Bind(&dispatch)
 		// 分發 1000 次挑最好的(愈後面的志願序人數愈少愈好)
 		bestDispatch := _taskDispatch(task, dispatch.Forced)
 		for i := 0; i < 999; i++ {
