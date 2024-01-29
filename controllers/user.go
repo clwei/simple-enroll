@@ -6,9 +6,9 @@ import (
 	"strconv"
 
 	"github.com/clwei/simple-enroll/models"
-	"github.com/flosch/pongo2"
-	"github.com/labstack/echo/v4"
+	"github.com/flosch/pongo2/v6"
 	"github.com/labstack/echo-contrib/session"
+	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -31,14 +31,14 @@ func (u *UserController) RegisterRoutes(prefix string) {
 }
 
 func (u *UserController) userList(c echo.Context) error {
-	sess, err := session.Get("session", c)
+	sess, _ := session.Get("session", c)
 	tuser, ok := sess.Values["user"]
 	if !ok {
 		tuser = models.User{}
 	}
 	fmt.Println("!! session !! user =", tuser)
 	users := []models.User{}
-	if err = db.Select(&users, "SELECT * FROM public.user ORDER BY id"); err != nil {
+	if err := db.Select(&users, "SELECT * FROM public.user ORDER BY id"); err != nil {
 		fmt.Println(err)
 	}
 	data := pongo2.Context{

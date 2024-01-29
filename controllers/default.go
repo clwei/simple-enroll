@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/clwei/simple-enroll/models"
-	"github.com/flosch/pongo2"
+	"github.com/flosch/pongo2/v6"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
-	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo-contrib/session"
+	"github.com/labstack/echo/v4"
 )
 
 var (

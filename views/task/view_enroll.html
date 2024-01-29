@@ -5,13 +5,13 @@
   <div class="uk-card-head">
     <h2 class="uk-card-header">學生志願序</h2>
   </div>
-  <div class="uk-card-body">
+  <div class="uk-card-body uk-overflow-auto">
     <h2 class="uk-heading-line uk-text-center uk-alert uk-alert-primary">學生志願序</h2>
     <table class="uk-table uk-table-striped uk-table-small">
       <thead>
         <tr>
           <th>學號</th>
-          {% for i in seq|make_list %}
+          {% for i in seq %}
           <th>志願{{ i }}</th>
           {% endfor %}
         </tr>
@@ -29,9 +29,9 @@
         {% endcomment %}
         {% for e in pool %}
         <tr>
-          <td>{{ e.Cno }}{{ e.Seat }}{{ e.Name }}</td>
+          <td><a href="/task/{{ task.ID }}/view/enroll/{{ e.Sid }}/">{{ e.Cno }}{{ e.Seat|integer|stringformat:"%02d" }}{{ e.Name }}</a></td>
           {% for c in e.Selection %}
-          <td>{{ c }}</td>
+          <td>{% if c in courses %}{{ c }}{% else %}<span class="uk-label uk-label-danger">{{ c }}</span>{% endif %}</td>
           {% endfor %}
         </tr>
         {% endfor %}

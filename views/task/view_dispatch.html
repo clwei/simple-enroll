@@ -11,7 +11,7 @@
         <input type="submit" class="uk-button uk-button-small uk-button-primary uk-margin-left" value="新增分發結果" />
       </div>
     </div>
-    <div class="uk-card-body uk-padding-small">
+    <div class="uk-card-body uk-padding-small uk-overflow-auto">
       <table class="uk-table uk-table-small uk-table-striped uk-table-hover uk-text-center">
         <thead>
           <tr>
@@ -23,12 +23,10 @@
             <th rowspan="2" class="uk-width-auto uk-text-center">分發成功<br/>平均分發志願序</th>
           </tr>
           <tr>
-            {% with format=task.Vnum|stringformat:"%%.%.ds" %}
-              {% for vi in "123456789"|stringformat:format %}
-              <th class="uk-table-shrink uk-text-center">第{{ vi }}志願</th>
-              {% endfor %}
-              <th class="uk-table-shrink uk-text-center">系統強制分發</th>
-            {% endwith %}
+            {% for vi in seq %}
+            <th class="uk-table-shrink uk-text-center">第{{ vi }}志願</th>
+            {% endfor %}
+            <th class="uk-table-shrink uk-text-center">系統強制分發</th>
           </tr>
         </thead>
         <tbody>

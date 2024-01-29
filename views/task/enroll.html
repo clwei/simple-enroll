@@ -16,7 +16,7 @@
         <div>
             <div class="uk-card uk-card-small uk-card-default">
                 <div class="uk-card-header">
-                    <div class="uk-card-title">{{ stu.Cno }} 班 {{ stu.Seat }} 號 {{ stu.Name }} # 已選項目</div>
+                    <div class="uk-card-title">{% if stu.Cno %}{{ stu.Cno }} 班{% endif %}{% if stu.Seat %}{{ stu.Seat }} 號 {% endif %}{{ stu.Name }} # 已選項目</div>
                     <div class="uk-card-badge uk-label"><span id="selcount"></span> / <span id="total"></span></div>
                 </div>
                 <div class="uk-text-muted uk-text-small uk-padding-small">

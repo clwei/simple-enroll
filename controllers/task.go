@@ -14,7 +14,7 @@ import (
 
 	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/clwei/simple-enroll/models"
-	"github.com/flosch/pongo2"
+	"github.com/flosch/pongo2/v6"
 	"github.com/labstack/echo/v4"
 )
 
@@ -38,6 +38,8 @@ func (t *TaskController) RegisterRoutes(prefix string) {
 	gt.POST("delete/", t.taskDelete, requireStaff)
 	gt.GET("view/", t.taskView, requireStaff)
 	gt.GET("view/enroll/", t.taskViewEnroll, requireStaff)
+	gt.GET("view/enroll/:username/", t.taskViewEnrollUser, requireStaff).Name = "taskViewEnrollUser"
+	gt.POST("view/enroll/:username/", t.taskViewEnrollUser, requireStaff).Name = "taskViewEnrollUser"
 	gt.GET("view/dispatch/", t.taskViewDispatch, requireStaff).Name = "dispatchList"
 	gt.POST("view/dispatch/", t.taskViewDispatch, requireStaff)
 	gt.GET("view/dispatch/:did/", t.taskViewDispatchItem, requireStaff)
@@ -46,7 +48,6 @@ func (t *TaskController) RegisterRoutes(prefix string) {
 	gt.GET("view/dispatch/:did/download/", t.taskViewDispatchItemDownload, requireStaff)
 }
 
-//
 func (t *TaskController) taskList(c echo.Context) error {
 	tasks := []models.Task{}
 	user := getCurrUser(c)
@@ -77,7 +78,6 @@ func (t *TaskController) getTaskByParam(c echo.Context, param string) (task mode
 	return task
 }
 
-//
 func (t *TaskController) taskLogin(c echo.Context) error {
 	task := c.Get("task").(models.Task)
 	data := pongo2.Context{
@@ -94,8 +94,9 @@ type TaskCourse struct {
 }
 
 // getTaskCourseList 取得選課任務的課程清單
-// 		task: 選課任務
-//		filter: 要過濾掉的課程名稱
+//
+//	task: 選課任務
+//	filter: 要過濾掉的課程名稱
 func getTaskCourseList(task models.Task, filter []string) (courses []TaskCourse) {
 	smap := map[string]bool{}
 	for _, course := range filter {
@@ -125,10 +126,10 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 			Sid:       username,
 			Selection: selection,
 		}
-		sql := `INSERT INTO public.enrollment(tid, sid, selection) 
-					VALUES(:tid, :sid, :selection)
-					ON CONFLICT(tid, sid) DO UPDATE
-					SET selection = EXCLUDED.selection`
+		sql := `INSERT INTO public.enrollment(tid, sid, selection)
+                    VALUES(:tid, :sid, :selection)
+                    ON CONFLICT(tid, sid) DO UPDATE
+                    SET selection = EXCLUDED.selection`
 		if _, err := db.NamedExec(sql, enrollment); err != nil {
 			fmt.Println("\n\n** taskSubmit ** insert error =", err, "\n")
 		}
@@ -169,9 +170,9 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
 	return c.Render(http.StatusOK, "task/login.html", data)
 }
 
-//---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // 以下需行政人員或管理員權限
-//---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 func (t *TaskController) taskForm(c echo.Context) error {
 	task := c.Get("task").(models.Task)
 	opTitle := "新增選課任務"
@@ -278,7 +279,6 @@ func getStudentEnrollments(task models.Task) (pool []StudentEnroll, estu []Stude
 	for _, enroll := range enrollments {
 		// 若已先選課，事後被排入排除名單，則略過其選課資料
 		if _, ok := forbid[enroll.Sid]; ok {
-
 			continue
 		}
 		selection := strings.Split(enroll.Selection, ",")
@@ -311,13 +311,22 @@ func (t *TaskController) taskView(c echo.Context) (err error) {
 	for _, e := range pool {
 		for i, c := range e.Selection {
 			if i < task.Vnum {
-				courseStat[c][i]++
+				if _, ok := courseStat[c]; ok {
+					courseStat[c][i]++
+				} else {
+					fmt.Println(e)
+					fmt.Println("\t", i, c)
+				}
 			}
 		}
 	}
+	seq := make([]int, task.Vnum)
+	for i := 0; i < task.Vnum; i++ {
+		seq[i] = i + 1
+	}
 	data := pongo2.Context{
 		"task": task,
-		"seq":  "123456789"[:task.Vnum],
+		"seq":  seq,
 		//"pool":       pool,
 		//"total":      total,
 		//"courses":    courses,
@@ -328,6 +337,11 @@ func (t *TaskController) taskView(c echo.Context) (err error) {
 
 func (t *TaskController) taskViewEnroll(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
+	course_definition := getTaskCourseList(task, []string{})
+	courses := []string{}
+	for _, c := range course_definition {
+		courses = append(courses, c.Name)
+	}
 	pool, estu := getStudentEnrollments(task)
 	sort.SliceStable(pool, func(i, j int) bool {
 		if pool[i].Cno == pool[j].Cno {
@@ -336,14 +350,65 @@ func (t *TaskController) taskViewEnroll(c echo.Context) (err error) {
 		return pool[i].Cno < pool[j].Cno
 	})
 	total := len(pool) + len(estu)
+	seq := make([]int, task.Vnum)
+	for i := 0; i < task.Vnum; i++ {
+		seq[i] = i + 1
+	}
 	data := pongo2.Context{
-		"task":  task,
-		"seq":   "123456789"[:task.Vnum],
-		"pool":  pool,
-		"estu":  estu,
-		"total": total,
+		"task":    task,
+		"seq":     seq,
+		"courses": courses,
+		"pool":    pool,
+		"estu":    estu,
+		"total":   total,
 	}
 	return c.Render(http.StatusOK, "task/view_enroll.html", data)
+}
+
+func (t *TaskController) taskViewEnrollUser(c echo.Context) (err error) {
+	task := c.Get("task").(models.Task)
+	username := c.Param("username")
+	selection := strings.TrimSpace(c.FormValue("selection"))
+	// 學生送出選課結果
+	if selection != "" {
+		enrollment := models.Enrollment{
+			Tid:       task.ID,
+			Sid:       username,
+			Selection: selection,
+		}
+		sql := `INSERT INTO public.enrollment(tid, sid, selection)
+                    VALUES(:tid, :sid, :selection)
+                    ON CONFLICT(tid, sid) DO UPDATE
+                    SET selection = EXCLUDED.selection`
+		if _, err := db.NamedExec(sql, enrollment); err != nil {
+			fmt.Println("\n\n** taskSubmit ** insert error =", err, "\n")
+		}
+		return c.Redirect(http.StatusSeeOther, "/task/")
+	}
+	data := pongo2.Context{
+		"task": task,
+	}
+	stumap := parseStudent(task.Students)
+	if stu, ok := stumap[username]; ok {
+		// 通過帳號密碼驗設證
+		enrollment := models.Enrollment{}
+		if err := db.Get(&enrollment, "SELECT * FROM enrollment WHERE tid = $1 AND sid = $2", task.ID, username); err != nil {
+		}
+		// scourses: 學生已選課程
+		var scourses []string
+		if enrollment.Selection != "" {
+			scourses = strings.Split(enrollment.Selection, ",")
+		}
+		courses := getTaskCourseList(task, scourses)
+		data["courses"] = courses
+		data["stu"] = stu
+		data["username"] = username
+		data["selection"] = enrollment.Selection
+		data["scourses"] = scourses
+		return c.Render(http.StatusOK, "task/enroll.html", data)
+	}
+	addAlertFlash(c, AlertDanger, "學號有誤！")
+	return c.Redirect(http.StatusSeeOther, "/task/")
 }
 
 //---------------------------------------------------------------------------
@@ -396,7 +461,7 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 	for _, course := range courses {
 		cdm[course.Name] = &CourseDispatchNode{course, []Student{}, []Student{}, course.upperbound}
 	}
-	rand.Seed(time.Now().UnixNano())
+	// rand.Seed(time.Now().UnixNano())
 	//
 	// 分發: 依第 1 志願, 第 2 志願, ... 處理
 	//
@@ -439,6 +504,9 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 				if len(cdn.Susp) > cdn.upperbound-len(cdn.Fixed) {
 					// rand.Shuffle(len(cdn.Susp), func(i, j int) { cdn.Susp[i], cdn.Susp[j] = cdn.Susp[j], cdn.Susp[i] })
 					sort.Slice(cdm[cid].Susp, func(i, j int) bool {
+						if priority[cdm[cid].Susp[i].Sid] == priority[cdm[cid].Susp[j].Sid] {
+							return rand.Int() < rand.Int()
+						}
 						return priority[cdm[cid].Susp[i].Sid] < priority[cdm[cid].Susp[j].Sid]
 					})
 				}
@@ -514,8 +582,17 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 		bestDispatch := _taskDispatch(task, dispatch.Forced)
 		for i := 0; i < 999; i++ {
 			disp := _taskDispatch(task, dispatch.Forced)
-			for j := len(disp.ev.Count) - 1; j >= 0 && disp.ev.Count[j] <= bestDispatch.ev.Count[j]; j-- {
-				if disp.ev.Count[j] < bestDispatch.ev.Count[j] {
+			/*
+			   for j := len(disp.ev.Count) - 1; j >= 0 && disp.ev.Count[j] <= bestDispatch.ev.Count[j]; j-- {
+			       if disp.ev.Count[j] < bestDispatch.ev.Count[j] {
+			           bestDispatch = disp
+			           break
+			       }
+			   }
+			*/
+			xcnt := len(disp.ev.Count)
+			for j := 0; j < xcnt && disp.ev.Count[j] >= bestDispatch.ev.Count[j]; j++ {
+				if disp.ev.Count[j] > bestDispatch.ev.Count[j] {
 					bestDispatch = disp
 					break
 				}
@@ -567,8 +644,14 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 		result = append(result, ee)
 	}
 
+	seq := make([]int, task.Vnum)
+	for i := 0; i < task.Vnum; i++ {
+		seq[i] = i + 1
+	}
+
 	data := pongo2.Context{
 		"task":   task,
+		"seq":    seq,
 		"result": result,
 	}
 	return c.Render(http.StatusOK, "task/view_dispatch.html", data)
