@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/360EntSecGroup-Skylar/excelize v1.4.1
-	github.com/flosch/pongo2/v6 v6.0.0
+	github.com/flosch/pongo2 v0.0.0-20200913210552-0d938eb266f3
 	github.com/gorilla/context v1.1.2 // indirect
 	github.com/gorilla/sessions v1.2.2
 	github.com/jmoiron/sqlx v1.3.5

@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/clwei/simple-enroll/controllers"
-	"github.com/flosch/pongo2/v6"
+	"github.com/flosch/pongo2"
 	"github.com/labstack/echo/v4"
 )
 

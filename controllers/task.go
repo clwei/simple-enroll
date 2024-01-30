@@ -14,7 +14,7 @@ import (
 
 	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/clwei/simple-enroll/models"
-	"github.com/flosch/pongo2/v6"
+	"github.com/flosch/pongo2"
 	"github.com/labstack/echo/v4"
 )
 

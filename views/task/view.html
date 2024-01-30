@@ -17,7 +17,7 @@
 <div>
   <div class="uk-card uk-card-default">
     <h2 class="uk-card-header">課程志願統計</h2>
-    <div class="uk-card-body uk-overflow-auto">
+    <div class="uk-card-body uk-overflow-auto sticky-first-column">
       <table class="uk-table uk-table-small uk-table-striped uk-table-hover">
         <thead>
           <tr class="uk-light uk-background-secondary">
@@ -30,7 +30,7 @@
         <tbody>
           {% for key, s in courseStat %}
           <tr>
-            <td class="uk-text-nowrap uk-text-right">{{ key }}</td>
+            <td class="uk-text-nowrap uk-text-right uk-light uk-background-secondary">{{ key }}</td>
             {% for n in s %}
             <td class="uk-text-center">{{ n }}</td>
             {% endfor %}

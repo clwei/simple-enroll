@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/clwei/simple-enroll/models"
-	"github.com/flosch/pongo2/v6"
+	"github.com/flosch/pongo2"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo-contrib/session"

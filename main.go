@@ -56,6 +56,7 @@ func main() {
 
 	e := echo.New()
 	e.Renderer = newRenderer(false)
+	// e.Renderer = renderer.Renderer{Debug: true}
 	e.HTTPErrorHandler = customHTTPErrorHandler
 	//e.Use(middleware.Logger())
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{

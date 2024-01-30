@@ -10,3 +10,10 @@ ol.uk-list.uk-sortable>li::before {
 ol.uk-list.uk-sortable {
     list-style-position: inside;
 }
+
+.sticky-first-column table>thead>tr:first-child>th:first-child, 
+.sticky-first-column table>tbody>tr>td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+}
