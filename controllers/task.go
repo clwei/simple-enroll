@@ -277,6 +277,10 @@ func getStudentEnrollments(task models.Task) (pool []StudentEnroll, estu []Stude
 		}
 	}
 	for _, enroll := range enrollments {
+		// 選課資料的人員若不在學生名單裡，則略過其選課資料
+		if _, ok := smap[enroll.Sid]; !ok {
+			continue
+		}
 		// 若已先選課，事後被排入排除名單，則略過其選課資料
 		if _, ok := forbid[enroll.Sid]; ok {
 			continue
