@@ -88,9 +88,9 @@ func (t *TaskController) taskLogin(c echo.Context) error {
 
 // TaskCourse ...
 type TaskCourse struct {
-	Name       string `json:Name`
-	lowerbound int    `json:lowerbound`
-	upperbound int    `json:upperbound`
+	Name       string `json:"Name"`
+	lowerbound int    `json:"lowerbound"`
+	upperbound int    `json:"upperbound"`
 }
 
 // getTaskCourseList 取得選課任務的課程清單
@@ -131,7 +131,7 @@ func (t *TaskController) taskSubmit(c echo.Context) error {
                     ON CONFLICT(tid, sid) DO UPDATE
                     SET selection = EXCLUDED.selection`
 		if _, err := db.NamedExec(sql, enrollment); err != nil {
-			fmt.Println("\n\n** taskSubmit ** insert error =", err, "\n")
+			fmt.Println("\n\n** taskSubmit ** insert error =", err)
 		}
 		return c.Redirect(http.StatusSeeOther, "/task/")
 	}
@@ -272,9 +272,10 @@ func getStudentEnrollments(task models.Task) (pool []StudentEnroll, estu []Stude
 	smap := parseStudent(task.Students)
 	forbid := parseStudent(task.Forbidden)
 	for sid := range forbid {
-		if _, ok := smap[sid]; ok {
-			delete(smap, sid)
-		}
+		// if _, ok := smap[sid]; ok {
+		// 	delete(smap, sid)
+		// }
+		delete(smap, sid)
 	}
 	for _, enroll := range enrollments {
 		// 選課資料的人員若不在學生名單裡，則略過其選課資料
@@ -385,7 +386,7 @@ func (t *TaskController) taskViewEnrollUser(c echo.Context) (err error) {
                     ON CONFLICT(tid, sid) DO UPDATE
                     SET selection = EXCLUDED.selection`
 		if _, err := db.NamedExec(sql, enrollment); err != nil {
-			fmt.Println("\n\n** taskSubmit ** insert error =", err, "\n")
+			fmt.Println("\n\n** taskSubmit ** insert error =", err)
 		}
 		return c.Redirect(http.StatusSeeOther, "/task/")
 	}
@@ -443,16 +444,152 @@ type CourseDispatchResult struct {
 	waiting []StudentEnroll
 }
 
-func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
+// func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
+// 	courses := getTaskCourseList(task, []string{})
+// 	enrolls, _ := getStudentEnrollments(task)
+// 	smap := parseStudent(task.Students)
+// 	forbid := parseStudent(task.Forbidden)
+// 	// 排除選修名單
+// 	for sid := range forbid {
+// 		if _, ok := smap[sid]; ok {
+// 			delete(smap, sid)
+// 		}
+// 	}
+// 	cdm := map[string]*CourseDispatchNode{}
+// 	waitingQueue := map[string]StudentEnroll{}
+// 	for sid, stu := range smap {
+// 		waitingQueue[sid] = StudentEnroll{*stu, []string{}}
+// 	}
+// 	for _, enroll := range enrolls {
+// 		waitingQueue[enroll.Sid] = enroll
+// 	}
+// 	for _, course := range courses {
+// 		cdm[course.Name] = &CourseDispatchNode{course, []Student{}, []Student{}, course.upperbound}
+// 	}
+// 	// rand.Seed(time.Now().UnixNano())
+// 	//
+// 	// 分發: 依第 1 志願, 第 2 志願, ... 處理
+// 	//
+// 	ev := EVScore{}
+// 	ev.Count = make([]int, task.Vnum+1)
+// 	for vIndex := 0; vIndex < task.Vnum; vIndex++ {
+// 		// 階段1：先將所有未分發學生依目前處理的志願序，先分發到課程的考慮選修名單
+// 		for sid, enroll := range waitingQueue {
+// 			if len(enroll.Selection) <= vIndex {
+// 				continue
+// 			}
+// 			vCourseName := enroll.Selection[vIndex]
+// 			if len(cdm[vCourseName].Fixed) < cdm[vCourseName].upperbound {
+// 				cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, *smap[sid])
+// 			}
+// 		}
+
+// 		// 統計課程缺額
+// 		for cid, cdn := range cdm {
+// 			cdm[cid].EmptySlots = int(math.Max(0, float64(cdn.upperbound-len(cdn.Fixed)-len(cdn.Susp))))
+// 		}
+
+// 		// 計算學生下一志額的缺額來當作排序依據
+// 		priority := map[string]int{}
+// 		// fmt.Println("#######", vIndex, task.Vnum)
+// 		for sid, enroll := range waitingQueue {
+// 			// fmt.Printf("\t%s%s%s: ", enroll.Cno, enroll.Seat, enroll.Name)
+// 			// fmt.Println(enroll.Selection)
+// 			if vIndex >= (len(enroll.Selection)-1) || vIndex >= task.Vnum-1 {
+// 				priority[sid] = 0
+// 			} else {
+// 				priority[sid] = cdm[enroll.Selection[vIndex+1]].EmptySlots*1000 + (rand.Int() % 10)
+// 			}
+// 		}
+
+// 		// 階段2：檢查每一門課程，若確認選修人數與考慮選修人數合計超過課程上限，則由考慮選修名單中剔除多餘人選
+// 		// for cid, cdn := range cdm {
+// 		for cid, cdn := range cdm {
+// 			if len(cdn.Susp) > 0 {
+// 				// 加上考慮名單的人數會爆班 => 依學生下一個志願的缺額數多的優先從考慮名單中剔除(取前面需要的個數就好)
+// 				if len(cdn.Susp) > cdn.upperbound-len(cdn.Fixed) {
+// 					// rand.Shuffle(len(cdn.Susp), func(i, j int) { cdn.Susp[i], cdn.Susp[j] = cdn.Susp[j], cdn.Susp[i] })
+// 					sort.Slice(cdm[cid].Susp, func(i, j int) bool {
+// 						if priority[cdm[cid].Susp[i].Sid] == priority[cdm[cid].Susp[j].Sid] {
+// 							return rand.Int() < rand.Int()
+// 						}
+// 						return priority[cdm[cid].Susp[i].Sid] < priority[cdm[cid].Susp[j].Sid]
+// 					})
+// 				}
+
+//					// 取出需要的名單，加進確認選修清單，並將其移出未分發學生(waitingQueue)清單
+//					end := len(cdn.Susp)
+//					if len(cdn.Susp)+len(cdn.Fixed) > cdn.upperbound {
+//						end -= len(cdn.Susp) + len(cdn.Fixed) - cdn.upperbound
+//					}
+//					for _, stu := range cdn.Susp[:end] {
+//						stu.VIndex = vIndex + 1            // 記錄該生的分發志願序
+//						cdn.Fixed = append(cdn.Fixed, stu) // 將該生加入課程的正式選修名單
+//						delete(waitingQueue, stu.Sid)
+//					}
+//					// 處理完了，清空考慮選修名單，待下一志願序使用
+//					cdn.Susp = []Student{}
+//					// 評估用
+//					ev.Count[vIndex] += end
+//					ev.Success += end
+//					ev.Score += (vIndex + 1) * end
+//				}
+//			}
+//		}
+//		// 啟用強制分發
+//		if forcedDispatch {
+//			// 先找出尚未額滿的課程
+//			availableCourses := []string{}
+//			for _, cdn := range cdm {
+//				if len(cdn.Fixed) < cdn.upperbound {
+//					availableCourses = append(availableCourses, cdn.Name)
+//				}
+//			}
+//			// 尚未分發的人，優先分發至未達開課人數的課程，或人數較少的課程
+//			for sid := range waitingQueue {
+//				// 每處理完一人，重新排序課程
+//				sort.SliceStable(availableCourses, func(i, j int) bool {
+//					ni, nj := cdm[availableCourses[i]], cdm[availableCourses[j]]
+//					if (len(ni.Fixed) < ni.upperbound) != (len(nj.Fixed) < nj.upperbound) {
+//						return len(ni.Fixed) < ni.upperbound
+//					}
+//					return len(ni.Fixed)-ni.lowerbound < len(nj.Fixed)-nj.lowerbound
+//				})
+//				smap[sid].VIndex = task.Vnum + 1
+//				cdm[availableCourses[0]].Fixed = append(cdm[availableCourses[0]].Fixed, *smap[sid])
+//			}
+//			// 統一加總評估資料
+//			ev.Count[task.Vnum] += len(waitingQueue)
+//			ev.Success += len(waitingQueue)
+//			ev.Score += (task.Vnum + 1) * len(waitingQueue)
+//			waitingQueue = map[string]StudentEnroll{}
+//		}
+//		ev.Failed = len(waitingQueue)
+//		ev.AvgScore = float32(ev.Score) / float32(ev.Success)
+//		// 將 map 轉為 slice 以便在 template 中使用
+//		result := []CourseDispatchNode{}
+//		for _, p := range cdm {
+//			result = append(result, *p)
+//		}
+//		// 未分發名單 map 轉 slice
+//		waiting := []StudentEnroll{}
+//		for _, wq := range waitingQueue {
+//			waiting = append(waiting, wq)
+//		}
+//		return CourseDispatchResult{ev, result, waiting}
+//	}
+func _taskDispatch(task models.Task, forcedDispatch bool, lowerAvg bool) CourseDispatchResult {
 	courses := getTaskCourseList(task, []string{})
 	enrolls, _ := getStudentEnrollments(task)
+	emap := map[string][]string{}
 	smap := parseStudent(task.Students)
 	forbid := parseStudent(task.Forbidden)
 	// 排除選修名單
 	for sid := range forbid {
-		if _, ok := smap[sid]; ok {
-			delete(smap, sid)
-		}
+		// if _, ok := smap[sid]; ok {
+		// 	delete(smap, sid)
+		// }
+		delete(smap, sid)
 	}
 	cdm := map[string]*CourseDispatchNode{}
 	waitingQueue := map[string]StudentEnroll{}
@@ -461,11 +598,12 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 	}
 	for _, enroll := range enrolls {
 		waitingQueue[enroll.Sid] = enroll
+		emap[enroll.Sid] = enroll.Selection
 	}
 	for _, course := range courses {
 		cdm[course.Name] = &CourseDispatchNode{course, []Student{}, []Student{}, course.upperbound}
 	}
-	// rand.Seed(time.Now().UnixNano())
+	rand.NewSource(time.Now().UnixNano())
 	//
 	// 分發: 依第 1 志願, 第 2 志願, ... 處理
 	//
@@ -474,12 +612,11 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 	for vIndex := 0; vIndex < task.Vnum; vIndex++ {
 		// 階段1：先將所有未分發學生依目前處理的志願序，先分發到課程的考慮選修名單
 		for sid, enroll := range waitingQueue {
-			if len(enroll.Selection) <= vIndex {
-				continue
-			}
-			vCourseName := enroll.Selection[vIndex]
-			if len(cdm[vCourseName].Fixed) < cdm[vCourseName].upperbound {
-				cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, *smap[sid])
+			if vIndex < len(enroll.Selection) {
+				vCourseName := enroll.Selection[vIndex]
+				if len(cdm[vCourseName].Fixed) < cdm[vCourseName].upperbound {
+					cdm[vCourseName].Susp = append(cdm[vCourseName].Susp, *smap[sid])
+				}
 			}
 		}
 
@@ -490,14 +627,11 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 
 		// 計算學生下一志額的缺額來當作排序依據
 		priority := map[string]int{}
-		// fmt.Println("#######", vIndex, task.Vnum)
 		for sid, enroll := range waitingQueue {
-			// fmt.Printf("\t%s%s%s: ", enroll.Cno, enroll.Seat, enroll.Name)
-			// fmt.Println(enroll.Selection)
 			if vIndex >= (len(enroll.Selection)-1) || vIndex >= task.Vnum-1 {
 				priority[sid] = 0
 			} else {
-				priority[sid] = cdm[enroll.Selection[vIndex+1]].EmptySlots //*1000 + (rand.Int() % 10)
+				priority[sid] = cdm[enroll.Selection[vIndex+1]].EmptySlots // *1000 + (rand.Int() % 10)
 			}
 		}
 
@@ -521,16 +655,58 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 					end -= len(cdn.Susp) + len(cdn.Fixed) - cdn.upperbound
 				}
 				for _, stu := range cdn.Susp[:end] {
-					stu.VIndex = vIndex + 1            // 記錄該生的分發志願序
-					cdn.Fixed = append(cdn.Fixed, stu) // 將該生加入課程的正式選修名單
+					stu.VIndex = vIndex + 1                      // 記錄該生的分發志願序
+					cdm[cid].Fixed = append(cdm[cid].Fixed, stu) // 將該生加入課程的正式選修名單
 					delete(waitingQueue, stu.Sid)
 				}
 				// 處理完了，清空考慮選修名單，待下一志願序使用
 				cdn.Susp = []Student{}
 				// 評估用
-				ev.Count[vIndex] += end
-				ev.Success += end
-				ev.Score += (vIndex + 1) * end
+				// ev.Count[vIndex] += end
+				// ev.Success += end
+				// ev.Score += (vIndex + 1) * end
+			}
+		}
+
+		// 階段3:
+		// 	檢查尚未分發的人與前一志願
+		if lowerAvg {
+			if vIndex == 0 {
+				continue
+			}
+			removeWaiting := []string{}
+
+			for _, enroll := range waitingQueue {
+				if len(enroll.Selection) <= vIndex {
+					continue
+				}
+			findVictim:
+				for i := 0; i <= vIndex; i++ {
+					vCourseName := enroll.Selection[i]
+					if cdm[vCourseName].EmptySlots > 0 {
+						enroll.Student.VIndex = i
+						cdm[vCourseName].Fixed = append(cdm[vCourseName].Fixed, enroll.Student)
+						removeWaiting = append(removeWaiting, enroll.Student.Sid)
+						fmt.Println(vIndex, i, vCourseName, enroll.Student)
+					} else {
+						for si, stu := range cdm[vCourseName].Fixed {
+							for j := 0; j <= vIndex; j++ {
+								if cdm[emap[stu.Sid][j]].EmptySlots > 0 {
+									stu.VIndex = j + 1
+									cdm[emap[stu.Sid][j]].Fixed = append(cdm[emap[stu.Sid][j]].Fixed, stu)
+									cdm[emap[stu.Sid][j]].EmptySlots--
+									enroll.Student.VIndex = i + 1
+									cdm[vCourseName].Fixed[si] = enroll.Student
+									removeWaiting = append(removeWaiting, enroll.Sid)
+									break findVictim
+								}
+							}
+						}
+					}
+				}
+			}
+			for _, sid := range removeWaiting {
+				delete(waitingQueue, sid)
 			}
 		}
 	}
@@ -557,11 +733,22 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 			cdm[availableCourses[0]].Fixed = append(cdm[availableCourses[0]].Fixed, *smap[sid])
 		}
 		// 統一加總評估資料
-		ev.Count[task.Vnum] += len(waitingQueue)
-		ev.Success += len(waitingQueue)
-		ev.Score += (task.Vnum + 1) * len(waitingQueue)
+		// ev.Count[task.Vnum] += len(waitingQueue)
+		// ev.Success += len(waitingQueue)
+		// ev.Score += (task.Vnum + 1) * len(waitingQueue)
 		waitingQueue = map[string]StudentEnroll{}
 	}
+
+	for _, cdn := range cdm {
+		// fmt.Println(cid)
+		for _, stu := range cdn.Fixed {
+			ev.Score += stu.VIndex
+			ev.Count[stu.VIndex-1]++
+			// fmt.Println("\t", stu, emap[stu.Sid])
+		}
+		ev.Success += len(cdn.Fixed)
+	}
+
 	ev.Failed = len(waitingQueue)
 	ev.AvgScore = float32(ev.Score) / float32(ev.Success)
 	// 將 map 轉為 slice 以便在 template 中使用
@@ -577,15 +764,20 @@ func _taskDispatch(task models.Task, forcedDispatch bool) CourseDispatchResult {
 	return CourseDispatchResult{ev, result, waiting}
 }
 
+type TmpDispatch struct {
+	models.Dispatch
+	LowerAvg bool `form:"loweravg"`
+}
+
 func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 	task := c.Get("task").(models.Task)
 	if c.Request().Method == http.MethodPost {
-		var dispatch models.Dispatch
+		var dispatch TmpDispatch
 		c.Bind(&dispatch)
 		// 分發 1000 次挑最好的(愈後面的志願序人數愈少愈好)
-		bestDispatch := _taskDispatch(task, dispatch.Forced)
-		for i := 0; i < 999; i++ {
-			disp := _taskDispatch(task, dispatch.Forced)
+		bestDispatch := _taskDispatch(task, dispatch.Forced, dispatch.LowerAvg)
+		for i := 1; i < 1000; i++ {
+			disp := _taskDispatch(task, dispatch.Forced, dispatch.LowerAvg)
 			/*
 			   for j := len(disp.ev.Count) - 1; j >= 0 && disp.ev.Count[j] <= bestDispatch.ev.Count[j]; j-- {
 			       if disp.ev.Count[j] < bestDispatch.ev.Count[j] {
@@ -601,6 +793,9 @@ func (t *TaskController) taskViewDispatch(c echo.Context) (err error) {
 					break
 				}
 			}
+			// if disp.ev.AvgScore < bestDispatch.ev.AvgScore {
+			// 	bestDispatch = disp
+			// }
 		}
 		waiting := bestDispatch.waiting
 		ev := bestDispatch.ev

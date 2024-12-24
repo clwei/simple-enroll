@@ -4,7 +4,11 @@ $("#tstart, #tend").datetimepicker({
 });
 // CKEditor
 let editor;
-InlineEditor.create(document.querySelector('#desc_editor')).then(function(newEditor) {editor = newEditor});
+InlineEditor
+    .create(document.querySelector('#desc_editor'), {
+        
+    })
+    .then(function(newEditor) {editor = newEditor});
 $('#submit').click(function(){
     $('#desc').val(editor.getData());
 });

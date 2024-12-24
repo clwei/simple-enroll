@@ -7,6 +7,7 @@
     <div class="uk-card-header uk-flex uk-flex-between">
       <h2 class="uk-title">志願分發</h2>
       <div class="uk-alig uk-flex-middle uk-flex">
+        <span uk-tooltip="盡量壓低平均分發志願序，有可能會降低前幾志願的分發數量，但會降低在後面志願才分發到的數量"><input type="checkbox" name="loweravg" id="loweravg" value="true" /> <label class="uk-text" for="loweravg">壓低平均分發志願序</label></span>
         <span uk-tooltip="未選填志願，或依志願分發失敗者，在依志願分發結束後由系統強制分發"><input type="checkbox" name="forced" id="forced" value="true" /> <label class="uk-text" for="forced">啟用強制分發</label></span>
         <input type="submit" class="uk-button uk-button-small uk-button-primary uk-margin-left" value="新增分發結果" />
       </div>
